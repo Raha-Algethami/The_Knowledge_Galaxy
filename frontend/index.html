@@ -1278,10 +1278,10 @@
             // below already knows how to consume them and only falls back to the local
             // simulation if the real thing isn't there.
             const GEMINI_BRIDGE_ENABLED = true;
-            const GEMINI_BRIDGE_QUESTIONS_PATH = 'http://localhost:8001/gemini_bridge/questions/';      // GET <slug>_<type>.json
-            const GEMINI_BRIDGE_REMEDIATION_PATH = 'http://localhost:8001/gemini_bridge/remediation/';  // GET <slug>.json
-            const GEMINI_GRADE_ENDPOINT = 'http://localhost:8001/grade';  // e.g. 'http://localhost:8001/grade' — POST, empty = disabled
-            const GEMINI_TEXTBOOK_UPLOAD_ENDPOINT = 'http://localhost:8001/upload_textbook';  // e.g. 'http://localhost:8001/upload_textbook' — POST, empty = disabled
+            const GEMINI_BRIDGE_QUESTIONS_PATH = 'https://the-knowledge-galaxy.onrender.com/gemini_bridge/questions/';      // GET <slug>_<type>.json
+            const GEMINI_BRIDGE_REMEDIATION_PATH = 'https://the-knowledge-galaxy.onrender.com/gemini_bridge/remediation/';  // GET <slug>.json
+            const GEMINI_GRADE_ENDPOINT = 'https://the-knowledge-galaxy.onrender.com/grade';  // e.g. 'https://the-knowledge-galaxy.onrender.com/grade' — POST, empty = disabled
+            const GEMINI_TEXTBOOK_UPLOAD_ENDPOINT = 'https://the-knowledge-galaxy.onrender.com/upload_textbook';  // e.g. 'https://the-knowledge-galaxy.onrender.com/upload_textbook' — POST, empty = disabled
 
             function slugify(str) {
                 return (str || 'general').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');

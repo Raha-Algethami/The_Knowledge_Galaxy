@@ -25,6 +25,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def read_root():
+    return {"status": "online", "message": "The Knowledge Galaxy API is running!"}
+
 # Configure Gemini
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
