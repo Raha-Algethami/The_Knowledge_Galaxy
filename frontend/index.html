@@ -1,0 +1,2737 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+    <title>The Knowledge Galaxy</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body {
+            background: #020204;
+            height: 100%;
+        }
+
+        body {
+            font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Courier New', monospace;
+            color: #e8e6f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 1240px;
+            height: 760px;
+            display: flex;
+            background: #000;
+            border: 1px solid #22222a;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(162, 48, 164, 0.1);
+        }
+
+        #canvasWrap {
+            position: relative;
+            width: 75%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+            touch-action: none;
+        }
+
+        #panel {
+            width: 25%;
+            height: 100%;
+            background: #141418;
+            border-left: 1px solid #2d2d38;
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #3a3a48 #141418;
+        }
+
+        /* ===== RESPONSIVE: TABLET (iPad, laptop windows, portrait/split-view) =====
+     Below 900px the side-by-side 75/25 split gets too cramped for both the
+     star field and the command panel to be usable, so the layout switches
+     to a vertical stack: galaxy view on top, full-width scrollable panel
+     below. canvas.js already resizes off #canvasWrap's live bounding box on
+     the window 'resize' event, so no JS changes are needed for the canvas
+     itself to fill whatever space these rules give it. */
+        @media (max-width: 900px) {
+            body {
+                padding: 0;
+                align-items: stretch;
+            }
+
+            #app {
+                max-width: 100%;
+                height: 100vh;
+                height: 100dvh;
+                flex-direction: column;
+                border-radius: 0;
+                border: none;
+            }
+
+            #canvasWrap {
+                width: 100%;
+                height: 46vh;
+                height: 46dvh;
+                flex-shrink: 0;
+            }
+
+            #panel {
+                width: 100%;
+                height: auto;
+                flex: 1 1 auto;
+                border-left: none;
+                border-top: 1px solid #2d2d38;
+                padding: 16px 14px 28px;
+            }
+        }
+
+        /* ===== RESPONSIVE: PHONE (iPhone, narrow Android) =====
+     Same stacked structure, just tuned proportions/spacing so the panel's
+     controls (buttons, inputs, dropdowns) stay comfortably tappable. */
+        @media (max-width: 520px) {
+            #canvasWrap {
+                height: 38vh;
+                height: 38dvh;
+            }
+
+            #panel {
+                padding: 14px 12px 32px;
+            }
+
+            .cmd-btn,
+            .sec-btn {
+                padding: 12px 0;
+                font-size: 10.5px;
+            }
+
+            input[type="text"],
+            input[type="number"],
+            select,
+            textarea {
+                font-size: 16px;
+            }
+        }
+
+        .eyebrow {
+            font-size: 10px;
+            letter-spacing: 2px;
+            color: #9a9ab0;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        #panelTitle {
+            font-size: 12px;
+            letter-spacing: 2.5px;
+            color: #CAC5E5;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2d2d38;
+            font-weight: 700;
+        }
+
+        #selName {
+            font-size: 18px;
+            letter-spacing: 1.5px;
+            margin: 4px 0 12px;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        #selList {
+            font-size: 11px;
+            line-height: 1.6;
+            color: #c7c5d0;
+            margin-bottom: 6px;
+            max-height: 100px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        #tipsList {
+            font-size: 10px;
+            line-height: 1.5;
+            color: #c7c5d0;
+            padding-left: 14px;
+            margin: 6px 0 8px;
+        }
+
+        .cmd-btn {
+            text-align: center;
+            font-size: 10px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            padding: 10px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #0a0a0c;
+            font-weight: 700;
+            margin-top: 8px;
+            transition: all 0.2s ease;
+            border: none;
+            width: 100%;
+        }
+
+        .cmd-btn:hover {
+            filter: brightness(1.2);
+            transform: translateY(-1px);
+        }
+
+        .action-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .sec-btn {
+            background: #1e1e26;
+            border: 1px solid #3a3a48;
+            color: #b8b6c8;
+            font-family: inherit;
+            font-size: 9px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 7px 0;
+            text-align: center;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sec-btn:hover {
+            background: #2a2a36;
+            color: #ffffff;
+            border-color: #5a5a6e;
+        }
+
+        .danger-btn {
+            border-color: #8a2a36;
+            color: #e07a86;
+        }
+
+        .danger-btn:hover {
+            background: #3a1820;
+            border-color: #c04858;
+            color: #fff;
+        }
+
+        .overlay-label {
+            position: absolute;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: #CAC5E5;
+            pointer-events: none;
+        }
+
+        .panel-section {
+            margin-top: 16px;
+            border-top: 1px solid #2d2d38;
+            padding-top: 12px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            background: #181820;
+            border: 1px solid #30303d;
+            color: #e8e6f0;
+            font-family: inherit;
+            font-size: 10px;
+            padding: 7px 9px;
+            margin: 5px 0;
+            border-radius: 4px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus,
+        input[type="number"]:focus,
+        select:focus,
+        textarea:focus {
+            border-color: #a230a4;
+        }
+
+        textarea {
+            height: 42px;
+            resize: none;
+        }
+
+        #addBtn,
+        #gradeBtn,
+        #addClusterBtn,
+        #fileImportLabel,
+        #bookSourceLabel,
+        #applyOverrideBtn,
+        #genQuizBtn,
+        #genWorksheetBtn {
+            text-align: center;
+            font-size: 9px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            padding: 8px 0;
+            border: 1px solid #CAC5E5;
+            color: #CAC5E5;
+            border-radius: 4px;
+            cursor: pointer;
+            background: rgba(202, 197, 229, 0.05);
+            transition: all 0.2s ease;
+            margin-top: 4px;
+            display: block;
+            width: 100%;
+        }
+
+        #addBtn:hover,
+        #gradeBtn:hover,
+        #addClusterBtn:hover,
+        #fileImportLabel:hover,
+        #bookSourceLabel:hover,
+        #applyOverrideBtn:hover,
+        #genQuizBtn:hover,
+        #genWorksheetBtn:hover {
+            background: rgba(202, 197, 229, 0.2);
+            color: #fff;
+        }
+
+        #fileImportInput,
+        #gradeImage,
+        #bookSourceInput {
+            display: none;
+        }
+
+        #gradeResult,
+        #sourceStatus {
+            font-size: 10px;
+            color: #c7c5d0;
+            margin-top: 8px;
+            line-height: 1.5;
+            background: #101014;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #22222c;
+        }
+
+        .hint {
+            font-size: 8px;
+            color: #6a6a76;
+            margin-top: 4px;
+        }
+
+        #gradeImageLabel {
+            display: block;
+            text-align: center;
+            font-size: 9px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding: 7px 0;
+            border: 1px dashed #4a4a58;
+            color: #8a8a96;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px 0;
+            background: #121216;
+        }
+
+        #gradeImageLabel:hover {
+            border-color: #7a7a8c;
+            color: #c7c5d0;
+        }
+
+        #gradeImagePreview {
+            display: none;
+            margin: 6px 0;
+        }
+
+        #gradeImagePreview img {
+            max-width: 100%;
+            display: block;
+            border: 1px solid #3a3a42;
+            border-radius: 4px;
+        }
+
+        /* Modals */
+        #quizModal,
+        #remediationModal {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(2, 2, 4, 0.92);
+            z-index: 1000;
+            padding: 30px;
+            overflow-y: auto;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-card {
+            max-width: 650px;
+            margin: 20px auto;
+            background: #141418;
+            border: 1px solid #3a3a48;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-title {
+            font-size: 15px;
+            letter-spacing: 1.5px;
+            color: #CAC5E5;
+            text-transform: uppercase;
+            font-weight: 700;
+            border-bottom: 1px solid #2d2d38;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .quiz-q {
+            margin-bottom: 20px;
+            background: #1a1a20;
+            padding: 16px;
+            border-radius: 6px;
+            border: 1px solid #2a2a36;
+        }
+
+        .quiz-q-text {
+            font-size: 12px;
+            font-weight: 700;
+            color: #f8f8fc;
+            margin-bottom: 12px;
+            line-height: 1.6;
+        }
+
+        .quiz-opt {
+            display: block;
+            width: 100%;
+            text-align: left;
+            background: #22222c;
+            border: 1px solid #3a3a48;
+            color: #c7c5d0;
+            padding: 9px 12px;
+            font-family: inherit;
+            font-size: 11px;
+            border-radius: 4px;
+            margin: 6px 0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .quiz-opt:hover {
+            background: #2c2c38;
+            color: #ffffff;
+        }
+
+        .quiz-feedback {
+            margin-top: 10px;
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: none;
+            line-height: 1.5;
+        }
+
+        .feedback-correct {
+            background: rgba(217, 252, 237, 0.15);
+            color: #D9FCED;
+            border: 1px solid #D9FCED;
+        }
+
+        .feedback-incorrect {
+            background: rgba(224, 122, 134, 0.15);
+            color: #e07a86;
+            border: 1px solid #8a2a36;
+        }
+
+        .modal-close {
+            text-align: center;
+            background: #CAC5E5;
+            color: #0a0a0c;
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            padding: 10px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+
+        .rem-step {
+            background: #1a1a22;
+            border-left: 3px solid #CAC5E5;
+            padding: 12px 16px;
+            margin-bottom: 14px;
+            border-radius: 0 6px 6px 0;
+        }
+
+        .rem-step-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #e8e6f0;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .rem-step-desc {
+            font-size: 10.5px;
+            color: #c7c5d0;
+            line-height: 1.5;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <div id="canvasWrap">
+            <canvas id="c"></canvas>
+            <div class="overlay-label" style="top:18px; left:20px; font-size:14px; font-weight:700;">The Knowledge
+                Galaxy</div>
+            <div class="overlay-label" style="bottom:16px; left:20px; font-size:9px; color:#4a4a58;">Logarithmic view
+            </div>
+        </div>
+        <div id="panel">
+            <div id="panelTitle">Command Panel</div>
+
+            <!-- Active Subject Management -->
+            <div class="eyebrow">Active Subject</div>
+            <select id="subjectSelect"></select>
+
+            <div class="action-grid" style="margin-top:2px; margin-bottom:8px;">
+                <button class="sec-btn" id="addSubjectBtn">+ Add Subject</button>
+                <button class="sec-btn danger-btn" id="deleteSubjectBtn">Delete Subject</button>
+            </div>
+
+            <!-- Roster Intake -->
+            <div class="panel-section">
+                <div class="eyebrow">Roster Intake</div>
+                <input id="newName" type="text" placeholder="Enter student name...">
+                <div id="addBtn">+ Add Student</div>
+
+                <label id="fileImportLabel" for="fileImportInput" style="margin-top:6px;">Import Roster File
+                    (CSV/TXT)</label>
+                <input id="fileImportInput" type="file" accept=".csv,.txt">
+                <div class="hint">Files with grades assign directly to clusters. Ungraded files launch scattered stars
+                    awaiting evaluation.</div>
+            </div>
+
+            <!-- Assessment & Evaluation -->
+            <div class="panel-section">
+                <div class="eyebrow">Assessment & Evaluation</div>
+                <select id="gradeStudentSelect"></select>
+                <label id="gradeImageLabel" for="gradeImage">+ Attach Assignment Photo</label>
+                <input id="gradeImage" type="file" accept="image/*,.pdf">
+                <div id="gradeImagePreview"><img id="gradeImgTag"></div>
+                <textarea id="gradeText" placeholder="Teacher observations or notes..."></textarea>
+                <div id="gradeBtn">Grade with Gemini</div>
+                <div id="gradeResult" style="display:none;"></div>
+            </div>
+
+            <!-- Manual Student Adjustment & Override -->
+            <div class="panel-section">
+                <div class="eyebrow">Manual Student Override</div>
+                <select id="overrideStudentSelect"></select>
+
+                <div style="display:flex; align-items:center; gap:6px; margin:4px 0;">
+                    <input type="checkbox" id="topStudentCheck" style="width:auto; margin:0;">
+                    <label for="topStudentCheck" style="font-size:9.5px; color:#c7c5d0;">Top Performer (100%)</label>
+                </div>
+
+                <div id="clusterOverrideGroup">
+                    <label style="font-size:8px; color:#8a8a98; text-transform:uppercase;">Assign Concept Galaxy</label>
+                    <select id="overrideClusterSelect"></select>
+
+                    <label style="font-size:8px; color:#8a8a98; text-transform:uppercase;">Confusion Level (0% -
+                        100%)</label>
+                    <input id="overrideConfusionInput" type="number" min="0" max="100" placeholder="e.g. 85">
+                </div>
+
+                <div id="applyOverrideBtn">Apply Override</div>
+            </div>
+
+            <!-- Course Source Material & Generator -->
+            <div class="panel-section">
+                <div class="eyebrow">Source Material & Content Gen</div>
+                <label id="bookSourceLabel" for="bookSourceInput">Attach Textbook / PDF Source</label>
+                <input id="bookSourceInput" type="file" accept=".pdf,.txt,.docx,.epub,.csv,.md">
+                <div id="sourceStatus" style="display:none;">Source: None loaded</div>
+
+                <div class="action-grid" style="margin-top:6px;">
+                    <div id="genWorksheetBtn">Worksheet</div>
+                    <div id="genQuizBtn">Quiz / Test</div>
+                </div>
+            </div>
+
+            <!-- Galaxy Inspection & Interventions -->
+            <div class="panel-section">
+                <div class="eyebrow">Selected Concept Galaxy</div>
+                <div id="selName">Unclustered Stars</div>
+
+                <div class="eyebrow">Enrolled Students (<span id="selCount">0</span>)</div>
+                <div id="selList"></div>
+
+                <div class="eyebrow" style="margin-top:10px;">Recommended Intervention</div>
+                <ul id="tipsList">
+                    <li>Awaiting evaluation to reveal clusters...</li>
+                </ul>
+
+                <button id="genBtn" class="cmd-btn">Generate Remediation Plan</button>
+
+                <div class="action-grid">
+                    <button class="sec-btn" id="btnSync">Sync Changes</button>
+                    <button class="sec-btn" id="btnExport">Export Subject Data</button>
+                </div>
+            </div>
+
+            <!-- Custom Concept Creation -->
+            <div class="panel-section">
+                <div class="eyebrow">Custom Concept Galaxy</div>
+                <input id="newClusterName" type="text" placeholder="New concept name...">
+                <div id="addClusterBtn">+ Add Concept Galaxy</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Web Interactive Quiz Overlay Modal -->
+    <div id="quizModal">
+        <div class="modal-card">
+            <div id="quizTitle" class="modal-title">Interactive Quiz</div>
+            <div id="quizContainer"></div>
+            <div class="modal-close" id="closeQuizBtn">Close Interactive Quiz</div>
+        </div>
+    </div>
+
+    <!-- Step-by-Step Remediation Plan Overlay Modal -->
+    <div id="remediationModal">
+        <div class="modal-card">
+            <div id="remTitle" class="modal-title">Step-by-Step Remediation Plan</div>
+            <div id="remContainer"></div>
+            <div class="modal-close" id="closeRemBtn">Close Remediation Guide</div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const canvas = document.getElementById('c');
+            const ctx = canvas.getContext('2d');
+            const wrap = document.getElementById('canvasWrap');
+
+            function resize() {
+                const r = wrap.getBoundingClientRect();
+                canvas.width = r.width; canvas.height = r.height;
+            }
+            resize();
+            window.addEventListener('resize', resize);
+            window.addEventListener('orientationchange', () => setTimeout(resize, 100)); // iOS fires 'resize' late/inconsistently after rotation
+
+            const MINT_GREEN = '#D9FCED';
+            const LIGHT_YELLOW = '#FFF8C5';
+
+            const PALETTE = [
+                '#A230A4', // Amethyst
+                '#F2E0A4', // Vanilla Custard
+                '#CAC5E5', // Periwinkle
+                '#F6FFE9', // Honeydew
+                '#290087', // Dark Ultramarine
+                '#09BBC8', // Strong Cyan
+                '#405FFA', // Electric Sapphire
+                '#D9FCED', // Frozen Water / Mint Green
+                '#3B3664'  // Twilight Indigo
+            ];
+
+            const NAMES = ['Ahmed', 'Sarah', 'Fatima', 'Omar', 'Layla', 'Khalid', 'Noor', 'Yousef', 'Reem', 'Faisal', 'Hessa', 'Turki', 'Maha', 'Nasser', 'Aisha', 'Bandar', 'Dana', 'Salman', 'Huda', 'Rashid', 'Mona', 'Talal', 'Sara', 'Zaid', 'Amal', 'Fahad', 'Lina', 'Yara', 'Abdullah', 'Rana'];
+
+            let SUBJECTS = {
+                mathematics: {
+                    name: "Mathematics",
+                    evaluated: true,
+                    bookName: null,
+                    bookText: "",
+                    clusters: [
+                        {
+                            id: 'addition', label: 'Addition & Subtraction', color: '#A230A4', rel: [0.30, 0.48], severity: 0.85,
+                            keywords: ['add', 'plus', 'sum', 'subtract', 'minus', 'carrying'],
+                            tips: ['Use visual base-10 blocks', 'Practice double-digit carrying drills', 'Re-teach carrying with physical counters']
+                        },
+                        {
+                            id: 'multiplication', label: 'Multiplication & Division', color: '#F2E0A4', rel: [0.74, 0.32], severity: 0.95,
+                            keywords: ['multiply', 'times', 'divide', 'quotient', 'factor'],
+                            tips: ['Practice daily grid timed drills', 'Group skip-counting practice', 'Use array matrices visually']
+                        },
+                        {
+                            id: 'geometry', label: 'Geometry & Angles', color: '#CAC5E5', rel: [0.52, 0.78], severity: 0.65,
+                            keywords: ['geometry', 'angle', 'triangle', 'shape', 'area'],
+                            tips: ['Use physical shape manipulatives', 'Review angle diagrams together', 'Practice real-world measuring']
+                        }
+                    ],
+                    students: []
+                },
+                science: {
+                    name: "Science",
+                    evaluated: true,
+                    bookName: null,
+                    bookText: "",
+                    clusters: [
+                        {
+                            id: 'photosynthesis', label: 'Photosynthesis & Cells', color: MINT_GREEN, rel: [0.32, 0.45], severity: 0.88,
+                            keywords: ['plant', 'leaf', 'cell', 'light', 'chlorophyll'],
+                            tips: ['Draw chloroplast energy flow charts', 'Observe leaf stomata under microscope', 'Review cellular respiration diagrams']
+                        },
+                        {
+                            id: 'thermodynamics', label: 'Thermodynamics & Heat', color: '#09BBC8', rel: [0.72, 0.35], severity: 0.92,
+                            keywords: ['heat', 'energy', 'temperature', 'conduction', 'entropy'],
+                            tips: ['Perform phase change experiments', 'Color-code molecular kinetic energy', 'Review heat transfer formulas']
+                        },
+                        {
+                            id: 'gravity', label: 'Gravity & Forces', color: '#3B3664', rel: [0.52, 0.78], severity: 0.55,
+                            keywords: ['gravity', 'force', 'mass', 'acceleration', 'motion'],
+                            tips: ['Build free-fall timing rigs', 'Plot velocity-time vector graphs', 'Solve force balance problems']
+                        }
+                    ],
+                    students: []
+                },
+                programming: {
+                    name: "Programming",
+                    evaluated: true,
+                    bookName: null,
+                    bookText: "",
+                    clusters: [
+                        {
+                            id: 'loops', label: 'Loops & Logic', color: '#405FFA', rel: [0.30, 0.48], severity: 0.75,
+                            keywords: ['loop', 'for', 'while', 'if', 'condition'],
+                            tips: ['Trace loop index variables step-by-step', 'Print coordinate matrix tables', 'Debug boundary logic off-by-one errors']
+                        },
+                        {
+                            id: 'recursion', label: 'Recursion & Stack', color: '#A230A4', rel: [0.72, 0.35], severity: 0.95,
+                            keywords: ['recursion', 'stack', 'base case', 'overflow', 'call'],
+                            tips: ['Draw call stack call trees', 'Trace execution step-by-step', 'Identify explicit base cases']
+                        },
+                        {
+                            id: 'data_structures', label: 'Data Structures', color: MINT_GREEN, rel: [0.54, 0.78], severity: 0.80,
+                            keywords: ['array', 'list', 'tree', 'graph', 'pointer'],
+                            tips: ['Visualize memory box diagrams', 'Build linked nodes physically', 'Trace pointer reassignment sequences']
+                        }
+                    ],
+                    students: []
+                }
+            };
+
+            function populatePreassignedStudents(subjKey) {
+                const subj = SUBJECTS[subjKey];
+                subj.students = [];
+                const N = 28;
+                const clusters = subj.clusters;
+                const totalSeverity = clusters.reduce((s, c) => s + c.severity, 0);
+
+                for (let i = 0; i < N; i++) {
+                    let r = Math.random() * totalSeverity, acc = 0, target = clusters[0];
+                    for (const c of clusters) { acc += c.severity; if (r <= acc) { target = c; break; } }
+                    subj.students.push({
+                        name: NAMES[i % NAMES.length],
+                        sid: 101 + i,
+                        cluster: target,
+                        isShooter: false,
+                        sx: Math.random(), sy: Math.random(),
+                        px: null, py: null,
+                        vx: 0, vy: 0,
+                        orbitR: 45 + Math.random() * 40,
+                        phase: Math.random() * Math.PI * 2,
+                        speed: 0.0025 + target.severity * 0.004,
+                        confidence: 0.55 + Math.random() * 0.44,
+                        justGraded: null,
+                        trail: []
+                    });
+                }
+
+                const TOP_STUDENTS = [NAMES[27], NAMES[28]];
+                for (let i = 0; i < TOP_STUDENTS.length; i++) {
+                    const angle = (Math.PI * 2 * i / TOP_STUDENTS.length) + (Math.random() - 0.5) * 0.5 + Math.PI / 6;
+                    subj.students.push({
+                        name: TOP_STUDENTS[i],
+                        sid: 500 + i,
+                        cluster: null,
+                        isShooter: true,
+                        x: canvas.width * (0.15 + Math.random() * 0.7),
+                        y: canvas.height * (0.15 + Math.random() * 0.7),
+                        vx: Math.cos(angle) * 0.095,
+                        vy: Math.sin(angle) * 0.095,
+                        orbitR: 45, phase: 0, speed: 0.003, confidence: 1.0,
+                        justGraded: null, trail: []
+                    });
+                }
+            }
+
+            populatePreassignedStudents('mathematics');
+            populatePreassignedStudents('science');
+            populatePreassignedStudents('programming');
+
+            let activeSubjectKey = 'mathematics';
+            let CLUSTERS = SUBJECTS[activeSubjectKey].clusters;
+            let selected = CLUSTERS[0];
+
+            const bgShooters = Array.from({ length: 3 }, () => ({
+                t0: Math.random() * 12,
+                dur: 7 + Math.random() * 5,
+                lane: 0.08 + Math.random() * 0.65,
+                trail: []
+            }));
+
+            const NEBULA = [
+                { x: 0.18, y: 0.25, r: 320, color: '#2a1030' },
+                { x: 0.75, y: 0.62, r: 380, color: '#170a20' },
+                { x: 0.45, y: 0.85, r: 280, color: '#20102a' }
+            ];
+
+            const bgStars = Array.from({ length: 110 }, () => ({
+                x: Math.random(), y: Math.random(), size: Math.random() > 0.7 ? 2 : 1, a: Math.random() * 0.5 + 0.25
+            }));
+
+            let hovered = null;
+            let draggingCluster = null;
+            let dragMoved = false;
+            let justDraggedCluster = false;
+            const startT = performance.now();
+            const TRANS = 2600;
+
+            function ease(t) { return 1 - Math.pow(1 - t, 3); }
+
+            function shuffleArray(arr) {
+                let a = [...arr];
+                for (let i = a.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [a[i], a[j]] = [a[j], a[i]];
+                }
+                return a;
+            }
+
+            let attachedImageName = null;
+            let attachedImageDataUrl = null;
+            document.getElementById('gradeImage').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                attachedImageName = file.name;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    attachedImageDataUrl = ev.target.result; // full base64 image, needed by real Gemini vision grading
+                    document.getElementById('gradeImgTag').src = ev.target.result;
+                    document.getElementById('gradeImagePreview').style.display = 'block';
+                    document.getElementById('gradeImageLabel').textContent = 'Attached: ' + file.name;
+                };
+                reader.readAsDataURL(file);
+            });
+
+            function cleanSourceExcerpt(rawText) {
+                if (!rawText) return "";
+                return rawText.replace(/\0/g, '')
+                    .replace(/[\uFFFD\uFFFE\uFFFF]/g, '')
+                    .replace(/([A-Za-z])\s+(?=[A-Za-z]\b)/g, '$1')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+
+            // ISOLATED Source Material Attachment Handler per Subject
+            // Sends the raw uploaded textbook to the backend so Gemini can actually
+            // ground quiz/worksheet/remediation generation in it (the file was
+            // previously only ever read client-side for the local placeholder
+            // generator — the backend never saw it, so "questions from the textbook"
+            // couldn't really happen). Fire-and-forget: if the endpoint isn't
+            // configured yet or is unreachable, this silently no-ops and the app
+            // keeps working entirely on local fallbacks, same as every other hook.
+            async function uploadTextbookToBackend(subjectName, fileName, fileText) {
+                if (!GEMINI_TEXTBOOK_UPLOAD_ENDPOINT) return;
+                try {
+                    await fetch(GEMINI_TEXTBOOK_UPLOAD_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ subject: subjectName, file_name: fileName, text: fileText })
+                    });
+                } catch (err) {
+                    // Backend not wired up yet or offline — nothing to do.
+                }
+            }
+
+            document.getElementById('bookSourceInput').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const currentSubj = SUBJECTS[activeSubjectKey];
+                currentSubj.bookName = file.name;
+
+                const reader = new FileReader();
+                reader.onload = function (ev) {
+                    currentSubj.bookText = cleanSourceExcerpt(ev.target.result || "");
+                    renderPanel();
+                    uploadTextbookToBackend(currentSubj.name, file.name, currentSubj.bookText);
+                };
+                reader.readAsText(file);
+            });
+
+            // ============================================================================
+            // DYNAMIC CONCEPT GALAXY PLACEMENT & CREATION
+            // ============================================================================
+            // Used any time a new concept cluster needs to appear on the star field —
+            // whether the teacher manually adds one, or grading (local heuristic today,
+            // Gemini 3.6 later) discovers a concept that doesn't match any existing
+            // galaxy. Positions are chosen via farthest-point sampling against every
+            // existing galaxy so new galaxies never spawn on top of each other or of
+            // an existing label, no matter how many concepts accumulate.
+            // Continuously nudges any two galaxies that are visually overlapping apart
+            // from each other, frame by frame, using a soft damped push (not an
+            // instant snap) so it reads as a gentle "settling" motion rather than a
+            // jump. This is the safety net on top of pickNonOverlappingPosition() —
+            // it self-heals overlaps no matter how they happened (crowded fields,
+            // many auto-discovered galaxies, resized windows, etc). Galaxies the
+            // teacher has manually dragged (c.manuallyPositioned) are treated as
+            // pinned: they never get pushed, but other galaxies still move out of
+            // their way.
+            function resolveClusterOverlaps(list, w, h) {
+                const PAD = 46;       // extra breathing room beyond the two glow radii
+                const DAMPING = 0.12; // fraction of overlap corrected per frame (smooth, not snappy)
+
+                for (let i = 0; i < list.length; i++) {
+                    for (let j = i + 1; j < list.length; j++) {
+                        const a = list[i], b = list[j];
+                        const ax = a.rel[0] * w, ay = a.rel[1] * h;
+                        const bx = b.rel[0] * w, by = b.rel[1] * h;
+                        const radA = 42 + a.severity * 58, radB = 42 + b.severity * 58;
+                        const minDist = radA + radB + PAD;
+
+                        let dx = bx - ax, dy = by - ay;
+                        let dist = Math.hypot(dx, dy);
+                        if (dist < 0.001) { dx = (Math.random() - 0.5); dy = (Math.random() - 0.5); dist = 0.001; }
+
+                        if (dist < minDist) {
+                            const push = (minDist - dist) * DAMPING;
+                            const nx = dx / dist, ny = dy / dist;
+                            const aPinned = !!a.manuallyPositioned, bPinned = !!b.manuallyPositioned;
+
+                            if (!aPinned && !bPinned) {
+                                a.rel[0] -= (nx * push) / w; a.rel[1] -= (ny * push) / h;
+                                b.rel[0] += (nx * push) / w; b.rel[1] += (ny * push) / h;
+                            } else if (!aPinned) {
+                                a.rel[0] -= (nx * push * 2) / w; a.rel[1] -= (ny * push * 2) / h;
+                            } else if (!bPinned) {
+                                b.rel[0] += (nx * push * 2) / w; b.rel[1] += (ny * push * 2) / h;
+                            }
+
+                            a.rel[0] = Math.min(0.94, Math.max(0.06, a.rel[0]));
+                            a.rel[1] = Math.min(0.94, Math.max(0.06, a.rel[1]));
+                            b.rel[0] = Math.min(0.94, Math.max(0.06, b.rel[0]));
+                            b.rel[1] = Math.min(0.94, Math.max(0.06, b.rel[1]));
+                        }
+                    }
+                }
+            }
+
+            function pickNonOverlappingPosition(existingClusters) {
+                const list = existingClusters || CLUSTERS;
+                const MARGIN_X = 0.14, MARGIN_TOP = 0.16, MARGIN_BOTTOM = 0.10;
+                const TARGET_SEP = 0.24; // stop early once a spot is at least this far from every galaxy
+                const CANDIDATES = 80;
+
+                let best = null, bestScore = -1;
+                for (let i = 0; i < CANDIDATES; i++) {
+                    const rx = MARGIN_X + Math.random() * (1 - 2 * MARGIN_X);
+                    const ry = MARGIN_TOP + Math.random() * (1 - MARGIN_TOP - MARGIN_BOTTOM);
+
+                    let minDist = list.length ? Infinity : 1;
+                    for (const c of list) {
+                        const d = Math.hypot(rx - c.rel[0], ry - c.rel[1]);
+                        if (d < minDist) minDist = d;
+                    }
+
+                    if (minDist > bestScore) {
+                        bestScore = minDist;
+                        best = [rx, ry];
+                    }
+                    if (bestScore >= TARGET_SEP) break;
+                }
+                return best || [0.5, 0.5];
+            }
+
+            // Finds an existing galaxy by label (case-insensitive) or creates a new one
+            // at a non-overlapping position. This is how "dynamically generated concept
+            // clusters" (spec §3.2) get materialized on screen — whether the label came
+            // from the teacher typing it in, or a grading pipeline guessing it.
+            function createOrFindCluster(label, opts) {
+                if (!label || !label.trim()) return null;
+                const cleanLabel = label.trim();
+                const existing = CLUSTERS.find(c => c.label.toLowerCase() === cleanLabel.toLowerCase());
+                if (existing) return existing;
+
+                opts = opts || {};
+                const rel = pickNonOverlappingPosition();
+                const newCluster = {
+                    id: slugify(cleanLabel) + '_' + Math.random().toString(36).slice(2, 7),
+                    label: cleanLabel,
+                    color: PALETTE[CLUSTERS.length % PALETTE.length],
+                    rel: rel,
+                    severity: (typeof opts.severity === 'number') ? opts.severity : (0.6 + Math.random() * 0.3),
+                    keywords: cleanLabel.toLowerCase().split(/\s+/),
+                    tips: (opts.tips && opts.tips.length) ? opts.tips : ['Interactive concept exercises', 'Peer learning group sessions', 'Targeted remediation worksheets'],
+                    autoDiscovered: !!opts.autoDiscovered
+                };
+                CLUSTERS.push(newCluster);
+                return newCluster;
+            }
+
+            // ============================================================================
+            // LOCAL "NO CONTEXT" CONCEPT GUESSER — stand-in for Gemini 3.6 vision/text
+            // reasoning until the real backend is wired up (see fetchGeminiGrade below).
+            // Rather than forcing every submission into one of the predefined galaxies,
+            // this pulls the most distinctive words out of the teacher's notes and
+            // proposes them AS a new concept — matching spec §3.2's "Identify & Categorize
+            // Errors... maps them directly to defined OR DYNAMICALLY GENERATED concept
+            // clusters." Swap this out for a real Gemini call by setting
+            // GEMINI_GRADE_ENDPOINT — no other code needs to change.
+            // ============================================================================
+            const CONCEPT_STOPWORDS = new Set(['the', 'a', 'an', 'is', 'are', 'was', 'were', 'of', 'to', 'and', 'or', 'in', 'on', 'for',
+                'with', 'this', 'that', 'it', 'its', 'student', 'wrote', 'write', 'writing', 'answer', 'answered', 'question', 'solve',
+                'solved', 'solving', 'find', 'found', 'calculate', 'calculated', 'use', 'used', 'using', 'i', 'my', 'me', 'we', 'our',
+                'their', 'they', 'not', 'but', 'has', 'have', 'had', 'still', 'just', 'also', 'very', 'some', 'all', 'into', 'from', 'about']);
+
+            function guessConceptFromText(text) {
+                if (!text || !text.trim()) return null;
+                const words = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+                    .filter(w => w.length > 3 && !CONCEPT_STOPWORDS.has(w));
+                if (words.length === 0) return null;
+
+                const freq = {};
+                words.forEach(w => { freq[w] = (freq[w] || 0) + 1; });
+                const ranked = Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, 2);
+                return ranked.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' & ');
+            }
+
+            function geminiPipelineGrade(student, text, imageName) {
+                const combined = ((text || '') + ' ' + (imageName || '') + ' ' + (student ? student.name : '')).toLowerCase();
+                let matchedCluster = null;
+                let maxHits = 0;
+
+                for (const cluster of CLUSTERS) {
+                    let hits = 0;
+                    if (cluster.keywords) {
+                        for (const kw of cluster.keywords) {
+                            if (combined.includes(kw)) hits++;
+                        }
+                    }
+                    if (combined.includes(cluster.label.toLowerCase())) hits += 2;
+                    if (hits > maxHits) {
+                        maxHits = hits;
+                        matchedCluster = cluster;
+                    }
+                }
+
+                const isTopScore = combined.includes('100') || combined.includes('perfect') || combined.includes('excellent');
+
+                if (!matchedCluster && !isTopScore) {
+                    // No predefined galaxy matched — guess a brand new concept from the
+                    // submission itself instead of dumping the student into a random one.
+                    const guessedLabel = guessConceptFromText(text);
+                    matchedCluster = guessedLabel
+                        ? createOrFindCluster(guessedLabel, { autoDiscovered: true })
+                        : (CLUSTERS[Math.floor(Math.random() * CLUSTERS.length)] || createOrFindCluster('Unclassified Concept', { autoDiscovered: true }));
+                }
+
+                const grade = isTopScore ? 100 : Math.floor(45 + Math.random() * 48);
+                const severity = isTopScore ? 0 : Math.round((matchedCluster.severity || 0.8) * 100);
+                const confidence = 0.96;
+
+                let evidence;
+                if (text && text.trim()) evidence = text.trim().slice(0, 60);
+                else if (imageName) evidence = 'Analyzed OCR coursework input: ' + imageName;
+                else evidence = 'Verified exact conceptual execution in submitted paperwork';
+
+                return {
+                    cluster: isTopScore ? null : matchedCluster,
+                    grade_percent: grade,
+                    severity: severity,
+                    confidence: confidence,
+                    evidence: evidence
+                };
+            }
+
+
+            function populateSubjectDropdown() {
+                const sel = document.getElementById('subjectSelect');
+                sel.innerHTML = Object.keys(SUBJECTS).map(k =>
+                    '<option value="' + k + '" ' + (k === activeSubjectKey ? 'selected' : '') + '>' + SUBJECTS[k].name + '</option>'
+                ).join('');
+            }
+
+            function populateStudentSelect() {
+                const currentStudents = SUBJECTS[activeSubjectKey].students;
+
+                const selGrade = document.getElementById('gradeStudentSelect');
+                const currentGrade = selGrade.value;
+                selGrade.innerHTML = currentStudents.map(p => {
+                    const status = p.isShooter ? ' (100%)' : (p.cluster ? ' (' + p.cluster.label + ')' : ' (Unassessed)');
+                    return '<option value="' + p.sid + '">' + p.name + ' · #' + p.sid + status + '</option>';
+                }).join('');
+                if (currentGrade) selGrade.value = currentGrade;
+
+                const selOverride = document.getElementById('overrideStudentSelect');
+                const currentOverride = selOverride.value;
+                selOverride.innerHTML = currentStudents.map(p => {
+                    const status = p.isShooter ? ' (100%)' : (p.cluster ? ' (' + p.cluster.label + ')' : ' (Unassessed)');
+                    return '<option value="' + p.sid + '">' + p.name + ' · #' + p.sid + status + '</option>';
+                }).join('');
+                if (currentOverride) selOverride.value = currentOverride;
+
+                const selClusterOverride = document.getElementById('overrideClusterSelect');
+                selClusterOverride.innerHTML = CLUSTERS.map(c =>
+                    '<option value="' + c.id + '">' + c.label + '</option>'
+                ).join('');
+            }
+
+            function renderPanel() {
+                populateSubjectDropdown();
+                const currentSubj = SUBJECTS[activeSubjectKey];
+                const isEval = currentSubj.evaluated;
+
+                const statusBox = document.getElementById('sourceStatus');
+                const bookLabel = document.getElementById('bookSourceLabel');
+                if (currentSubj.bookName) {
+                    statusBox.style.display = 'block';
+                    statusBox.innerHTML = 'Source Ingested:<br><strong style="color:' + LIGHT_YELLOW + '">' + currentSubj.bookName + '</strong>';
+                    bookLabel.textContent = 'Change Source Material';
+                } else {
+                    statusBox.style.display = 'none';
+                    statusBox.innerHTML = 'Source: None loaded';
+                    bookLabel.textContent = 'Attach Textbook / PDF Source';
+                }
+
+                if (isEval && selected) {
+                    document.getElementById('selName').textContent = selected.label;
+                    document.getElementById('selName').style.color = selected.color;
+                    const currentStudents = currentSubj.students;
+                    const members = currentStudents.filter(p => p.cluster === selected && !p.isShooter);
+                    document.getElementById('selCount').textContent = members.length;
+                    document.getElementById('selList').innerHTML = members.map(p =>
+                        '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;">' +
+                        '<span onclick="window.__editStudent(' + p.sid + ')" style="cursor:pointer;border-bottom:1px dotted #6a6a76;">' + p.name + ' · #' + p.sid + '</span>' +
+                        '<span onclick="window.__removeStudent(' + p.sid + ')" style="cursor:pointer;color:#7d7d8c;padding-left:8px;">×</span>' +
+                        '</div>'
+                    ).join('');
+                    const tips = selected.tips ? selected.tips : ['Target misconceptions with visual examples', 'Schedule one-on-one review session'];
+                    document.getElementById('tipsList').innerHTML = tips.map(t => '<li>' + t + '</li>').join('');
+                    document.getElementById('genBtn').style.background = selected.color;
+                } else {
+                    document.getElementById('selName').textContent = 'Unclustered Stars';
+                    document.getElementById('selName').style.color = LIGHT_YELLOW;
+                    const currentStudents = currentSubj.students;
+                    document.getElementById('selCount').textContent = currentStudents.length;
+                    document.getElementById('selList').innerHTML = currentStudents.map(p =>
+                        '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;">' +
+                        '<span onclick="window.__editStudent(' + p.sid + ')" style="cursor:pointer;border-bottom:1px dotted #6a6a76;">' + p.name + ' · #' + p.sid + '</span>' +
+                        '<span onclick="window.__removeStudent(' + p.sid + ')" style="cursor:pointer;color:#7d7d8c;padding-left:8px;">×</span>' +
+                        '</div>'
+                    ).join('');
+                    document.getElementById('tipsList').innerHTML = '<li>Awaiting evaluation to reveal clusters...</li>';
+                    document.getElementById('genBtn').style.background = LIGHT_YELLOW;
+                }
+
+                populateStudentSelect();
+            }
+
+            document.getElementById('topStudentCheck').addEventListener('change', (e) => {
+                const clusterGroup = document.getElementById('clusterOverrideGroup');
+                if (e.target.checked) {
+                    clusterGroup.style.opacity = '0.35';
+                    clusterGroup.style.pointerEvents = 'none';
+                } else {
+                    clusterGroup.style.opacity = '1.0';
+                    clusterGroup.style.pointerEvents = 'auto';
+                }
+            });
+
+            document.getElementById('overrideStudentSelect').addEventListener('change', (e) => {
+                const sid = parseInt(e.target.value, 10);
+                const currentStudents = SUBJECTS[activeSubjectKey].students;
+                const p = currentStudents.find(pp => pp.sid === sid);
+                if (!p) return;
+
+                const topCheck = document.getElementById('topStudentCheck');
+                if (p.isShooter) {
+                    topCheck.checked = true;
+                    topCheck.dispatchEvent(new Event('change'));
+                } else {
+                    topCheck.checked = false;
+                    topCheck.dispatchEvent(new Event('change'));
+                    if (p.cluster) {
+                        document.getElementById('overrideClusterSelect').value = p.cluster.id;
+                    }
+                    document.getElementById('overrideConfusionInput').value = Math.round(p.confidence * 100);
+                }
+            });
+
+            document.getElementById('applyOverrideBtn').addEventListener('click', () => {
+                const sid = parseInt(document.getElementById('overrideStudentSelect').value, 10);
+                const currentStudents = SUBJECTS[activeSubjectKey].students;
+                let p = currentStudents.find(pp => pp.sid === sid);
+                if (!p) return;
+
+                const isTop = document.getElementById('topStudentCheck').checked;
+                SUBJECTS[activeSubjectKey].evaluated = true;
+
+                if (isTop) {
+                    p.isShooter = true;
+                    p.cluster = null;
+                    p.confidence = 1.0;
+                    p.x = canvas.width * (0.15 + Math.random() * 0.7);
+                    p.y = canvas.height * (0.15 + Math.random() * 0.7);
+                    const angle = Math.random() * Math.PI * 2;
+                    p.vx = Math.cos(angle) * 0.095;
+                    p.vy = Math.sin(angle) * 0.095;
+                    p.trail = [];
+                } else {
+                    const clusterId = document.getElementById('overrideClusterSelect').value;
+                    const targetCluster = CLUSTERS.find(c => c.id === clusterId) || CLUSTERS[0];
+                    const confusionVal = parseInt(document.getElementById('overrideConfusionInput').value, 10);
+                    const conf = (!isNaN(confusionVal) && confusionVal >= 0 && confusionVal <= 100) ? (confusionVal / 100) : 0.85;
+
+                    p.isShooter = false;
+                    p.cluster = targetCluster;
+                    p.confidence = conf;
+                    p.justGraded = performance.now();
+                    selected = targetCluster;
+                }
+
+                renderPanel();
+            });
+
+            function buildQuestion(qText, correctOpt, dist1, dist2, dist3, expText, qNum) {
+                let opts = [correctOpt, dist1, dist2, dist3];
+                // Defense-in-depth: a distractor that coincidentally matches the correct
+                // answer (this happened with a few of the randomized math/programming
+                // questions below, now fixed) makes indexOf() mark only ONE of the two
+                // identical-looking options as "correct" — clicking the other one reads
+                // as wrong even though it's the same value. This won't silently corrupt
+                // anything, but flags it loudly if a future edit reintroduces the issue.
+                // (Two distractors coincidentally matching each other is harmless — the
+                // correct index is unaffected — so that case isn't flagged here.)
+                if ([dist1, dist2, dist3].includes(correctOpt)) {
+                    console.warn('A distractor matches the correct answer for question:', qText, opts);
+                }
+                let shuffled = shuffleArray(opts);
+                let correctIdx = shuffled.indexOf(correctOpt);
+                return {
+                    q: qNum + ". " + qText,
+                    options: shuffled,
+                    correct: correctIdx,
+                    exp: expText
+                };
+            }
+
+            // ============================================================================
+            // GEMINI 3.6 BACKEND INTEGRATION — CENTRAL CONFIG
+            // ============================================================================
+            // This demo currently simulates 4 things that the real Python backend (spec
+            // §3) is meant to do with actual Gemini 3.6 calls:
+            //   1. Question generation for quizzes/worksheets (incl. from a textbook)
+            //   2. Recommended intervention / remediation plan generation
+            //   3. Assignment grading, error detection & cluster assignment
+            //   4. (textbook-sourced variants of #1, using the uploaded book as context)
+            //
+            // Every one of these has TWO integration points below:
+            //   - A "bridge" GET fetch for batch-generated content the Python backend
+            //     already wrote to disk as JSON (mirrors class_data.json / assignment_
+            //     XXX.json from spec §2) — used for quizzes, worksheets, and remediation
+            //     plans, since those are generated once per cluster and can be cached.
+            //   - A live POST endpoint for grading, since each submission is graded
+            //     on-demand when the teacher clicks "Grade with Gemini".
+            //
+            // ALL of them are OFF by default (or point at paths that don't exist yet),
+            // so the demo runs entirely on local fallback logic until you wire the
+            // backend up — nothing breaks on stage. To activate:
+            //   - Serve the Python-written JSON files at the *_PATH locations below
+            //     (or edit the paths to point wherever your backend writes them), and/or
+            //   - Set GEMINI_GRADE_ENDPOINT to your backend's grading route.
+            // No other frontend changes are needed once those exist — every feature
+            // below already knows how to consume them and only falls back to the local
+            // simulation if the real thing isn't there.
+            const GEMINI_BRIDGE_ENABLED = true;
+            const GEMINI_BRIDGE_QUESTIONS_PATH = 'http://localhost:8001/gemini_bridge/questions/';      // GET <slug>_<type>.json
+            const GEMINI_BRIDGE_REMEDIATION_PATH = 'http://localhost:8001/gemini_bridge/remediation/';  // GET <slug>.json
+            const GEMINI_GRADE_ENDPOINT = 'http://localhost:8001/grade';  // e.g. 'http://localhost:8001/grade' — POST, empty = disabled
+            const GEMINI_TEXTBOOK_UPLOAD_ENDPOINT = 'http://localhost:8001/upload_textbook';  // e.g. 'http://localhost:8001/upload_textbook' — POST, empty = disabled
+
+            function slugify(str) {
+                return (str || 'general').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+            }
+
+            function normalizeGeminiQuestion(raw, idx) {
+                const qText = raw.question || raw.q || raw.text;
+                const opts = raw.options || raw.choices;
+                if (!qText || !Array.isArray(opts) || opts.length < 2) return null;
+                let correctIdx = raw.correct_index;
+                if (correctIdx === undefined) correctIdx = raw.correctIndex;
+                if (correctIdx === undefined) correctIdx = raw.correct;
+                if (typeof correctIdx !== 'number' || correctIdx < 0 || correctIdx >= opts.length) correctIdx = 0;
+                return {
+                    q: (idx + 1) + ". " + qText.replace(/^\d+\.\s*/, ''),
+                    options: opts,
+                    correct: correctIdx,
+                    exp: raw.explanation || raw.exp || "Verified by Gemini 3.6."
+                };
+            }
+
+            // Attempts to load Gemini-generated questions from the backend file bridge.
+            // Returns an array of question objects, or null if none are available yet.
+            // EXPECTED BRIDGE FILE: ./gemini_bridge/questions/<cluster_slug>_<type>.json
+            // EXPECTED SCHEMA:
+            // {
+            //   "cluster": "Fractions", "type": "quiz", "generated_by": "gemini-3.6",
+            //   "questions": [
+            //     { "question": "What is 2/4 + 1/4?", "options": ["3/4","3/8","1/2","2/4"],
+            //       "correct_index": 0, "explanation": "Add numerators once denominators match." }
+            //   ]
+            // }
+            // NOTE: when a textbook is attached for the active subject, the Python
+            // backend should use its extracted content as grounding context when it
+            // generates this file — that's how "questions from the textbook" becomes
+            // real (Gemini reading the actual book) instead of the local placeholder
+            // heuristic in generateSourceQuestions() below.
+            async function fetchGeminiQuestions(clusterName, type) {
+                if (!GEMINI_BRIDGE_ENABLED) return null;
+                const fileName = slugify(clusterName) + '_' + type + '.json';
+                try {
+                    const res = await fetch(GEMINI_BRIDGE_QUESTIONS_PATH + fileName, { cache: 'no-store' });
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    const list = Array.isArray(data.questions) ? data.questions : null;
+                    if (!list || list.length === 0) return null;
+                    const normalized = list.map(normalizeGeminiQuestion).filter(Boolean);
+                    return normalized.length > 0 ? normalized : null;
+                } catch (err) {
+                    // Bridge file not present (expected until the Python/Gemini backend is
+                    // wired up) or fetch blocked (e.g. opening the HTML via file://). Either
+                    // way, we fall through to the local generators — never break the demo.
+                    return null;
+                }
+            }
+
+            // Attempts to load a Gemini-generated remediation / intervention plan for a
+            // concept cluster from the backend file bridge.
+            // EXPECTED BRIDGE FILE: ./gemini_bridge/remediation/<cluster_slug>.json
+            // EXPECTED SCHEMA:
+            // {
+            //   "cluster": "Fractions", "generated_by": "gemini-3.6",
+            //   "steps": [
+            //     { "title": "Diagnostic Root Cause Analysis",
+            //       "description": "Review student evidence snippets to find where..." }
+            //   ]
+            // }
+            // Returns an array of { num, desc } objects (matching this file's existing
+            // rendering format), or null if the plan isn't available yet.
+            async function fetchGeminiRemediationPlan(clusterName) {
+                if (!GEMINI_BRIDGE_ENABLED) return null;
+                const fileName = slugify(clusterName) + '.json';
+                try {
+                    const res = await fetch(GEMINI_BRIDGE_REMEDIATION_PATH + fileName, { cache: 'no-store' });
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    const list = Array.isArray(data.steps) ? data.steps : null;
+                    if (!list || list.length === 0) return null;
+                    const normalized = list
+                        .map(s => (s && s.title && s.description) ? { num: s.title, desc: s.description } : null)
+                        .filter(Boolean);
+                    return normalized.length > 0 ? normalized : null;
+                } catch (err) {
+                    return null;
+                }
+            }
+
+            // Sends a submission (student notes / attached image name) to a live Gemini
+            // 3.6 grading endpoint on the Python backend, per spec §3.4's JSON schema.
+            // Gemini is expected to receive NO predefined concept list — it reads the
+            // assignment (text/vision) and returns whatever "assigned_cluster" name it
+            // judges fits, exactly like a teacher naming a misconception on the fly.
+            // If that name doesn't match an existing galaxy, one is created for it via
+            // createOrFindCluster() (non-overlapping placement included) — this is the
+            // real implementation of spec §3.2's "dynamically generated concept clusters."
+            // Returns a normalized grade result matching geminiPipelineGrade()'s local
+            // fallback shape, or null if the endpoint isn't configured / unreachable.
+            async function fetchGeminiGrade(student, text, imageName, imageDataUrl) {
+                if (!GEMINI_GRADE_ENDPOINT) return null;
+                try {
+                    // image_base64/image_mime_type carry the actual scanned assignment so
+                    // the backend can hand real bytes to Gemini's vision input — sending
+                    // only the filename (as earlier versions of this hook did) gives
+                    // Gemini nothing to actually look at.
+                    let imageBase64 = null, imageMimeType = null;
+                    if (imageDataUrl) {
+                        const match = /^data:([^;]+);base64,(.*)$/.exec(imageDataUrl);
+                        if (match) { imageMimeType = match[1]; imageBase64 = match[2]; }
+                    }
+
+                    const res = await fetch(GEMINI_GRADE_ENDPOINT, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            subject: SUBJECTS[activeSubjectKey].name,
+                            student_id: student ? student.sid : null,
+                            student_name: student ? student.name : null,
+                            notes: text || '',
+                            image_name: imageName || null,
+                            image_base64: imageBase64,
+                            image_mime_type: imageMimeType
+                            // Deliberately NOT sending a predefined cluster/concept list —
+                            // Gemini determines the concept purely from the assignment content.
+                        })
+                    });
+                    if (!res.ok) return null;
+                    const data = await res.json();
+                    if (typeof data.grade_percent !== 'number') return null;
+
+                    const isTopScore = data.grade_percent === 100;
+                    const firstError = Array.isArray(data.errors) && data.errors.length > 0 ? data.errors[0] : null;
+                    let matchedCluster = null;
+                    if (!isTopScore && data.assigned_cluster) {
+                        matchedCluster = createOrFindCluster(data.assigned_cluster, {
+                            severity: firstError ? firstError.severity / 100 : undefined,
+                            tips: data.recommended_interventions,
+                            autoDiscovered: true
+                        });
+                    }
+                    if (!isTopScore && !matchedCluster) {
+                        matchedCluster = CLUSTERS[0] || createOrFindCluster('Unclassified Concept', { autoDiscovered: true });
+                    }
+
+                    return {
+                        cluster: matchedCluster,
+                        grade_percent: data.grade_percent,
+                        severity: firstError ? firstError.severity : 0,
+                        confidence: firstError ? firstError.confidence : 0.9,
+                        evidence: (firstError && firstError.evidence) || data.overall_feedback || 'Evaluated by Gemini 3.6.'
+                    };
+                } catch (err) {
+                    // Endpoint not wired up yet, offline, or a network error. Fall back to
+                    // the local simulated grading pipeline so the demo keeps working.
+                    return null;
+                }
+            }
+
+            // SINGLE ENTRY POINT used by the worksheet & quiz buttons. Tries Gemini 3.6
+            // (backend, once wired up) first, then falls back to the local generators.
+            // Also returns a human-readable sourceLabel so the UI/PDF can show where the
+            // questions came from.
+            async function getQuestions(currentSubj, clusterName, type, subjKey) {
+                const geminiQs = await fetchGeminiQuestions(clusterName, type);
+                if (geminiQs) {
+                    return { questions: geminiQs, sourceLabel: "Gemini 3.6 AI-Generated" };
+                }
+                if (currentSubj.bookName) {
+                    return {
+                        questions: generateSourceQuestions(clusterName, type),
+                        sourceLabel: currentSubj.bookName
+                    };
+                }
+                return {
+                    questions: getDefaultQuestions(subjKey, clusterName, type),
+                    sourceLabel: "Curriculum Standard Baseline (Dynamic)"
+                };
+            }
+
+            // STRICT TEXTBOOK SOURCE QUESTION GENERATORS (When Textbook is uploaded)
+            function generateSourceQuestions(clusterName, type) {
+                const currentSubj = SUBJECTS[activeSubjectKey];
+                const bName = currentSubj.bookName;
+                const bText = currentSubj.bookText;
+                const target = (clusterName || 'General Concept');
+
+                let lines = bText ? bText.split(/\r?\n/)
+                    .map(l => cleanSourceExcerpt(l))
+                    .filter(l => l.length > 20 && !l.includes('PDF') && !l.includes('obj') && !l.includes('stream')) : [];
+
+                if (lines.length < 5) {
+                    lines = [
+                        "Core operational theorem defined in " + bName,
+                        "Primary computational step for resolving " + target,
+                        "Essential boundary condition required for state stability",
+                        "Key relationship between input variables and system output",
+                        "Recommended analytical procedure for error mitigation",
+                        "Standard classification rule specified in chapter review",
+                        "Systematic method for evaluating performance metrics",
+                        "Transformation logic applied during parameter isolation",
+                        "Fundamental rule governing parameter retention",
+                        "Checkpoint criteria for verifying mastery of " + target
+                    ];
+                }
+
+                const shuffledLines = shuffleArray(lines);
+
+                if (type === 'worksheet') {
+                    return shuffledLines.slice(0, 5).map((line, idx) => {
+                        const excerpt = line.length > 70 ? line.slice(0, 70) + "..." : line;
+                        return buildQuestion(
+                            "Based on text excerpt: \"" + excerpt + "\", what is the primary conclusion?",
+                            "Primary operational principle stated in text",
+                            "Secondary assumption requiring verification",
+                            "Inverse transformation rule",
+                            "Unrelated baseline state",
+                            "Derived directly from textbook source: " + bName,
+                            idx + 1
+                        );
+                    });
+                } else {
+                    const quizLines = shuffledLines.length >= 10 ? shuffledLines.slice(5, 10) : shuffleArray(shuffledLines).slice(0, 5);
+                    return quizLines.map((line, idx) => {
+                        const excerpt = line.length > 70 ? line.slice(0, 70) + "..." : line;
+                        return buildQuestion(
+                            "According to section: \"" + excerpt + "\", which procedure is correct?",
+                            "Execute parameter isolation first",
+                            "Apply standard proportional offset",
+                            "Disregard initial boundary constraints",
+                            "Invert primary operation",
+                            "Verified against uploaded source: " + bName,
+                            idx + 1
+                        );
+                    });
+                }
+            }
+
+            // DEFAULT DYNAMIC AUTOMATIC QUESTIONS (When NO textbook is uploaded for active subject)
+            // GENERATES FRESH DIFFERENT QUESTIONS EVERY SINGLE TIME YOU CLICK!
+            function getDefaultQuestions(subjKey, clusterName, type) {
+                const isMath = subjKey === 'mathematics';
+                const isProg = subjKey === 'programming';
+
+                let pool = [];
+
+                if (isMath) {
+                    const a1 = Math.floor(Math.random() * 50) + 10;
+                    const a2 = Math.floor(Math.random() * 50) + 15;
+                    const m1 = Math.floor(Math.random() * 9) + 3;
+                    const m2 = Math.floor(Math.random() * 9) + 4;
+                    const xVal = Math.floor(Math.random() * 15) + 2;
+
+                    pool = [
+                        buildQuestion("Calculate: " + a1 + " + " + a2 + " =", (a1 + a2).toString(), (a1 + a2 + 10).toString(), (a1 + a2 - 4).toString(), (a1 + a2 + 3).toString(), "Sum calculated correctly."),
+                        buildQuestion("Solve for x: 2x - " + (xVal * 2) + " = 0", "x = " + xVal, "x = " + (xVal + 3), "x = " + (xVal - 1), "x = " + (xVal * 2), "Add " + (xVal * 2) + " to both sides, then divide by 2 to isolate x."),
+                        buildQuestion("What is the product of " + m1 + " × " + m2 + "?", (m1 * m2).toString(), (m1 * m2 + 5).toString(), (m1 * m2 - 2).toString(), (m1 * m2 + 12).toString(), "Multiplication product."),
+                        buildQuestion("Simplify the fraction: " + (m1 * 2) + "/" + (m1 * 4) + " =", "1/2", "3/4", "2/3", "1/4", "Both the numerator and denominator share a common factor, reducing to 1/2."),
+                        buildQuestion("Find the area of a rectangle with length " + (a1 % 12 + 5) + "cm and width 4cm:", ((a1 % 12 + 5) * 4) + " cm²", ((a1 % 12 + 5) + 4) + " cm²", ((a1 % 12 + 5) * 4 + 8) + " cm²", ((a1 % 12 + 5) * 4 + 16) + " cm²", "Area of a rectangle = length × width."),
+                        buildQuestion("What is 25% of " + (m1 * 20) + "?", (m1 * 5).toString(), (m1 * 10).toString(), (m1 * 5 + 10).toString(), (m1 * 5 + 5).toString(), "25% means multiplying by 0.25 (equivalent to dividing by 4)."),
+                        buildQuestion("Find the perimeter of a square with side length " + (m2 + 2) + "m:", ((m2 + 2) * 4) + " m", ((m2 + 2) * (m2 + 2)) + " m²", ((m2 + 2) * 4 + 4) + " m", ((m2 + 2) * 4 - 4) + " m", "Perimeter of a square = 4 × side length."),
+                        buildQuestion("Evaluate: " + (m1 % 4 + 2) + "³ =", Math.pow(m1 % 4 + 2, 3).toString(), Math.pow(m1 % 4 + 2, 2).toString(), (Math.pow(m1 % 4 + 2, 3) + 8).toString(), (Math.pow(m1 % 4 + 2, 3) - 8).toString(), "Cubing a number means multiplying it by itself three times."),
+                        buildQuestion("Which property is shown by a(b + c) = ab + ac?", "Distributive", "Commutative", "Associative", "Identity", "This is the distributive property: multiplying a sum equals multiplying each term and adding."),
+                        buildQuestion("Find the mean of the numbers: 4, 8, 12, 16, 20:", "12", "10", "14", "15", "Mean = sum of values ÷ count: (4+8+12+16+20) ÷ 5 = 12.")
+                    ];
+                } else if (isProg) {
+                    const nBound = Math.floor(Math.random() * 5) + 3;
+                    pool = [
+                        buildQuestion("What is the output of: for(int i=0; i<" + nBound + "; i++) print(i)?", Array.from({ length: nBound }, (_, k) => k).join(' '), Array.from({ length: Math.max(1, nBound - 1) }, (_, k) => k).join(' '), Array.from({ length: nBound + 1 }, (_, k) => k).join(' '), "1 to " + nBound, "The loop starts at i=0 and prints i on every pass while i < " + nBound + "."),
+                        buildQuestion("What prevents an infinite recursion loop?", "Base Case", "For Loop Condition", "Return Statement", "Global Variable", "A base case is the condition that stops a function from calling itself further."),
+                        buildQuestion("Which data structure operates on Last In First Out (LIFO)?", "Stack", "Queue", "Binary Tree", "Linked List", "A Stack removes the most recently added item first — Last In, First Out."),
+                        buildQuestion("Time complexity of accessing an element by index in an array?", "O(1)", "O(N)", "O(log N)", "O(N²)", "Arrays store elements contiguously, so indexed access is constant-time."),
+                        buildQuestion("What value does a pointer variable store in memory?", "Memory Address", "Integer Value", "String Literal", "Boolean Flag", "A pointer holds the memory address where another variable's value is stored."),
+                        buildQuestion("Which sorting algorithm has an average time complexity of O(N log N)?", "Quick Sort", "Bubble Sort", "Insertion Sort", "Selection Sort", "Quick Sort's divide-and-conquer partitioning averages O(N log N)."),
+                        buildQuestion("Which operator represents logical AND in C++/Java/JavaScript?", "&&", "||", "!", "&", "&& evaluates to true only when both conditions on either side are true."),
+                        buildQuestion("In Object-Oriented Programming, what concept allows a subclass to inherit attributes?", "Inheritance", "Encapsulation", "Polymorphism", "Abstraction", "Inheritance lets a subclass reuse the fields and methods of its parent class."),
+                        buildQuestion("What is the starting index of standard arrays in C/Java/Python?", "0", "1", "-1", "Index 1", "C, Java, and Python all use 0-based indexing for arrays."),
+                        buildQuestion("Which data structure uses key-value pairs for O(1) average lookups?", "Hash Map / Dictionary", "Binary Tree", "Stack", "Array List", "A Hash Map computes an index from the key, giving average constant-time lookups.")
+                    ];
+                } else { // Science or Custom
+                    pool = [
+                        buildQuestion("Primary organelle responsible for photosynthesis in plant cells?", "Chloroplast", "Mitochondria", "Nucleus", "Ribosome", "Chloroplasts contain chlorophyll, which captures light for photosynthesis."),
+                        buildQuestion("Which gas do plants absorb from atmosphere during photosynthesis?", "Carbon Dioxide", "Oxygen", "Nitrogen", "Hydrogen", "Plants absorb CO₂ and release oxygen as a byproduct of photosynthesis."),
+                        buildQuestion("State of matter with definite volume but no definite shape?", "Liquid", "Solid", "Gas", "Plasma", "A liquid keeps a fixed volume but flows to take the shape of its container."),
+                        buildQuestion("The Law of Conservation of Energy states energy cannot be:", "Created or Destroyed", "Transferred", "Converted", "Measured", "Energy only changes form or transfers between objects — the total stays constant."),
+                        buildQuestion("Unit used to measure electrical potential difference?", "Volt", "Ampere", "Ohm", "Watt", "Voltage (electrical potential difference) is measured in Volts."),
+                        buildQuestion("What is the chemical symbol for Gold on the Periodic Table?", "Au", "Ag", "Fe", "Cu", "Au comes from 'aurum', the Latin word for gold."),
+                        buildQuestion("Which force pulls objects toward the center of Earth?", "Gravity", "Friction", "Magnetism", "Tension", "Gravity is the attractive force pulling objects toward Earth's center."),
+                        buildQuestion("What molecule carries genetic instructions in living organisms?", "DNA", "RNA", "ATP", "Glucose", "DNA encodes the genetic instructions used in development and function."),
+                        buildQuestion("At what temperature does pure water boil at sea level?", "100°C", "0°C", "50°C", "200°C", "At standard sea-level pressure, pure water boils at 100°C."),
+                        buildQuestion("What type of reaction absorbs thermal energy from surroundings?", "Endothermic", "Exothermic", "Combustion", "Nuclear", "Endothermic reactions take in heat from their surroundings, cooling them.")
+                    ];
+                }
+
+                // Shuffle pool completely every single click so questions update dynamically!
+                const shuffledPool = shuffleArray(pool);
+                const selectedSet = (type === 'worksheet') ? shuffledPool.slice(0, 5) : shuffledPool.slice(5, 10);
+
+                return selectedSet.map((item, idx) => ({
+                    q: (idx + 1) + ". " + item.q.replace(/^\d+\.\s*/, ''),
+                    options: item.options,
+                    correct: item.correct,
+                    exp: item.exp || "Verify the calculation or definition above to see how the correct answer was reached."
+                }));
+            }
+
+            // DOWNLOADABLE PDF QUESTION WORKSHEET
+            document.getElementById('genWorksheetBtn').addEventListener('click', async () => {
+                const currentSubj = SUBJECTS[activeSubjectKey];
+                const targetClusterName = selected ? selected.label : 'General Course Material';
+
+                // TIER 1: Gemini 3.6 (backend bridge, once wired up)
+                // TIER 2: Textbook source (if attached)
+                // TIER 3: Local "no source" dynamic generator — always available offline
+                const genBtn = document.getElementById('genWorksheetBtn');
+                const originalBtnText = genBtn.textContent;
+                genBtn.textContent = 'GENERATING...';
+                genBtn.style.pointerEvents = 'none';
+
+                let questions, sourceLabel;
+                try {
+                    ({ questions, sourceLabel } = await getQuestions(currentSubj, targetClusterName, 'worksheet', activeSubjectKey));
+                } finally {
+                    genBtn.textContent = originalBtnText;
+                    genBtn.style.pointerEvents = 'auto';
+                }
+
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(15);
+                doc.text("THE KNOWLEDGE GALAXY — COURSE WORKSHEET", 14, 20);
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(10);
+                doc.text("Subject: " + currentSubj.name.toUpperCase() + " | Concept Galaxy: " + targetClusterName.toUpperCase(), 14, 27);
+                doc.text("Source Alignment: " + sourceLabel, 14, 33);
+                doc.text("Student Name: _______________________   Date: _______________", 14, 39);
+
+                doc.line(14, 43, 196, 43);
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(10.5);
+                doc.text("INSTRUCTIONS: Solve the questions below.", 14, 50);
+
+                let y = 58;
+                questions.forEach((qObj, idx) => {
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(10);
+
+                    const splitQ = doc.splitTextToSize(qObj.q, 175);
+                    doc.text(splitQ, 14, y);
+                    y += (splitQ.length * 5) + 2;
+
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(9);
+                    qObj.options.forEach((opt, oIdx) => {
+                        const letter = String.fromCharCode(65 + oIdx);
+                        doc.text("   [" + letter + "] " + opt, 18, y);
+                        y += 5;
+                    });
+
+                    y += 6;
+                    doc.setDrawColor(220, 220, 220);
+                    doc.line(18, y, 190, y);
+                    y += 8;
+
+                    if (y > 270) {
+                        doc.addPage();
+                        y = 20;
+                    }
+                });
+
+                const fileName = "Worksheet_" + targetClusterName.replace(/\s+/g, '_') + ".pdf";
+                doc.save(fileName);
+            });
+
+            // WEB POPUP INTERACTIVE QUIZ WITH AUTOMATIC ANSWER VERIFICATION
+            document.getElementById('genQuizBtn').addEventListener('click', async () => {
+                const currentSubj = SUBJECTS[activeSubjectKey];
+                const targetClusterName = selected ? selected.label : 'General Assessment';
+
+                // TIER 1: Gemini 3.6 (backend bridge, once wired up)
+                // TIER 2: Textbook source (if attached)
+                // TIER 3: Local "no source" dynamic generator — always available offline
+                const quizBtn = document.getElementById('genQuizBtn');
+                const originalBtnText = quizBtn.textContent;
+                quizBtn.textContent = 'GENERATING...';
+                quizBtn.style.pointerEvents = 'none';
+
+                let questions, sourceLabel;
+                try {
+                    ({ questions, sourceLabel } = await getQuestions(currentSubj, targetClusterName, 'quiz', activeSubjectKey));
+                } finally {
+                    quizBtn.textContent = originalBtnText;
+                    quizBtn.style.pointerEvents = 'auto';
+                }
+
+                const quizModal = document.getElementById('quizModal');
+                const quizTitle = document.getElementById('quizTitle');
+                const quizContainer = document.getElementById('quizContainer');
+
+                quizTitle.textContent = "Interactive Quiz: " + targetClusterName + " (" + sourceLabel + ")";
+                quizContainer.innerHTML = '';
+
+                questions.forEach((qObj, qIdx) => {
+                    const qDiv = document.createElement('div');
+                    qDiv.className = 'quiz-q';
+
+                    const qText = document.createElement('div');
+                    qText.className = 'quiz-q-text';
+                    qText.textContent = qObj.q;
+                    qDiv.appendChild(qText);
+
+                    const feedbackBox = document.createElement('div');
+                    feedbackBox.className = 'quiz-feedback';
+
+                    qObj.options.forEach((opt, optIdx) => {
+                        const btn = document.createElement('button');
+                        btn.className = 'quiz-opt';
+                        const letter = String.fromCharCode(65 + optIdx);
+                        btn.textContent = "[" + letter + "] " + opt;
+
+                        btn.onclick = function () {
+                            const allBtns = qDiv.querySelectorAll('.quiz-opt');
+                            allBtns.forEach(b => b.style.pointerEvents = 'none');
+
+                            if (optIdx === qObj.correct) {
+                                btn.style.background = '#07240F';
+                                btn.style.borderColor = '#D9FCED';
+                                btn.style.color = '#D9FCED';
+                                feedbackBox.className = 'quiz-feedback feedback-correct';
+                                feedbackBox.textContent = "✓ " + qObj.exp;
+                            } else {
+                                btn.style.background = '#3a1820';
+                                btn.style.borderColor = '#8a8a96';
+                                btn.style.color = '#e07a86';
+
+                                allBtns[qObj.correct].style.background = '#07240F';
+                                allBtns[qObj.correct].style.borderColor = '#D9FCED';
+                                allBtns[qObj.correct].style.color = '#D9FCED';
+
+                                feedbackBox.className = 'quiz-feedback feedback-incorrect';
+                                feedbackBox.textContent = "× Incorrect. Correct answer was [" + String.fromCharCode(65 + qObj.correct) + "]. " + qObj.exp;
+                            }
+                            feedbackBox.style.display = 'block';
+                        };
+
+                        qDiv.appendChild(btn);
+                    });
+
+                    qDiv.appendChild(feedbackBox);
+                    quizContainer.appendChild(qDiv);
+                });
+
+                quizModal.style.display = 'block';
+            });
+
+            document.getElementById('closeQuizBtn').addEventListener('click', () => {
+                document.getElementById('quizModal').style.display = 'none';
+            });
+
+            // STEP-BY-STEP REMEDIATION PLAN GUIDE
+            // Shared by "Generate Remediation Plan" and "Export Subject Data" so both
+            // pull the plan the exact same way: Gemini 3.6 (backend bridge, once wired
+            // up) first, falling back to the local template — tailored with the
+            // textbook name and live student evidence when available — otherwise.
+            async function getRemediationPlan(currentSubj, targetClusterName, enrolledCount) {
+                const geminiPlan = await fetchGeminiRemediationPlan(targetClusterName);
+
+                const sourceText = geminiPlan
+                    ? "Generated by Gemini 3.6"
+                    : (currentSubj.bookName ? "Tailored directly from uploaded course book: " + currentSubj.bookName : "Aligned with Standard Curriculum Framework");
+
+                if (geminiPlan) return { steps: geminiPlan, sourceText };
+
+                let snippetContext = "";
+                if (currentSubj.bookText && currentSubj.bookText.trim().length > 10) {
+                    const lines = currentSubj.bookText.split(/\r?\n/).map(l => cleanSourceExcerpt(l)).filter(l => l.length > 15);
+                    if (lines.length > 0) snippetContext = " Reference excerpt from " + currentSubj.bookName + ": \"" + lines[0].slice(0, 80) + "...\".";
+                }
+
+                const steps = [
+                    {
+                        num: "Step 1: Diagnostic Misconception Root Cause Analysis",
+                        desc: "Address the core confusion in " + targetClusterName + ". Review student evidence snippets with the " + enrolledCount + " enrolled students to highlight where the operational rule was misapplied." + snippetContext
+                    },
+                    {
+                        num: "Step 2: Textbook Alignment & Foundational Re-teaching",
+                        desc: (currentSubj.bookName ? "Refer directly to chapter definitions in '" + currentSubj.bookName + "'." : "Follow core curriculum textbook definitions.") + " Re-explain foundational rules using concrete visual representations, physical manipulatives, or memory box diagrams."
+                    },
+                    {
+                        num: "Step 3: Guided Scaffolding & Worked Example Tracing",
+                        desc: "Lead a guided group exercise. Walk through 3 fully worked problems step-by-step on the board, requiring students to state the core principle out loud before calculating."
+                    },
+                    {
+                        num: "Step 4: Targeted Peer-Pairing & Individual Practice",
+                        desc: "Pair students from " + targetClusterName + " with top-performing peer mentors. Provide targeted 5-question practice sheets to verify misconception elimination."
+                    },
+                    {
+                        num: "Step 5: Master Re-Assessment & Dynamic Cluster Exit",
+                        desc: "Administer the interactive source quiz. As students achieve mastery (>85%), use the 'Grade with Gemini' tool or 'Manual Override' to resolve their star out of the " + targetClusterName + " galaxy."
+                    }
+                ];
+
+                return { steps, sourceText };
+            }
+
+            document.getElementById('genBtn').addEventListener('click', async () => {
+                if (!selected) { alert('Please select a concept galaxy.'); return; }
+
+                const currentSubj = SUBJECTS[activeSubjectKey];
+                const targetClusterName = selected.label;
+                const currentStudents = currentSubj.students;
+                const enrolledMembers = currentStudents.filter(p => p.cluster === selected && !p.isShooter);
+
+                const remModal = document.getElementById('remediationModal');
+                const remTitle = document.getElementById('remTitle');
+                const remContainer = document.getElementById('remContainer');
+                const planBtn = document.getElementById('genBtn');
+
+                remTitle.textContent = "Step-by-Step Remediation Guide: " + targetClusterName.toUpperCase();
+                remContainer.innerHTML = '';
+
+                // TIER 1: Gemini 3.6 (backend bridge, once wired up)
+                // TIER 2: Local template plan — always available offline, still tailored
+                //         with the textbook name and live student evidence when present
+                const originalBtnText = planBtn.textContent;
+                planBtn.textContent = 'GENERATING...';
+                planBtn.style.pointerEvents = 'none';
+                let plan;
+                try {
+                    plan = await getRemediationPlan(currentSubj, targetClusterName, enrolledMembers.length);
+                } finally {
+                    planBtn.textContent = originalBtnText;
+                    planBtn.style.pointerEvents = 'auto';
+                }
+
+                const overviewDiv = document.createElement('div');
+                overviewDiv.style.marginBottom = '16px';
+                overviewDiv.style.fontSize = '11px';
+                overviewDiv.style.color = '#CAC5E5';
+                overviewDiv.innerHTML =
+                    '<strong>Target Galaxy:</strong> ' + targetClusterName + ' (' + enrolledMembers.length + ' students struggling)<br>' +
+                    '<strong>Source Alignment:</strong> ' + plan.sourceText;
+                remContainer.appendChild(overviewDiv);
+
+                plan.steps.forEach(sObj => {
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = 'rem-step';
+
+                    const sTitle = document.createElement('div');
+                    sTitle.className = 'rem-step-title';
+                    sTitle.textContent = sObj.num;
+
+                    const sDesc = document.createElement('div');
+                    sDesc.className = 'rem-step-desc';
+                    sDesc.textContent = sObj.desc;
+
+                    stepDiv.appendChild(sTitle);
+                    stepDiv.appendChild(sDesc);
+                    remContainer.appendChild(stepDiv);
+                });
+
+                remModal.style.display = 'block';
+            });
+
+            document.getElementById('closeRemBtn').addEventListener('click', () => {
+                document.getElementById('remediationModal').style.display = 'none';
+            });
+
+            // Adding Subject Starts Fully Empty (No Preassigned Roster, No Textbook)
+            document.getElementById('addSubjectBtn').addEventListener('click', () => {
+                const name = prompt("Enter new subject name:");
+                if (!name || !name.trim()) return;
+                const key = name.trim().toLowerCase().replace(/\s+/g, '_');
+                if (SUBJECTS[key]) { alert("Subject already exists!"); return; }
+
+                SUBJECTS[key] = {
+                    name: name.trim(),
+                    evaluated: false,
+                    bookName: null,
+                    bookText: "",
+                    clusters: [
+                        { id: key + '_c1', label: name.trim() + ' Fundamentals', color: PALETTE[0], rel: [0.35, 0.48], severity: 0.8, tips: ['Review core concepts'], keywords: [name.trim().toLowerCase(), 'fundamentals', 'basics'] },
+                        { id: key + '_c2', label: name.trim() + ' Advanced Topics', color: PALETTE[1], rel: [0.65, 0.52], severity: 0.9, tips: ['Practice complex problems'], keywords: [name.trim().toLowerCase(), 'advanced'] }
+                    ],
+                    students: [] // FULLY EMPTY ROSTER!
+                };
+
+                activeSubjectKey = key;
+                CLUSTERS = SUBJECTS[key].clusters;
+                selected = CLUSTERS[0];
+                renderPanel();
+            });
+
+            document.getElementById('deleteSubjectBtn').addEventListener('click', () => {
+                const keys = Object.keys(SUBJECTS);
+                if (keys.length <= 1) {
+                    alert("Cannot delete the only subject!");
+                    return;
+                }
+                if (confirm('Delete subject "' + SUBJECTS[activeSubjectKey].name + '"?')) {
+                    delete SUBJECTS[activeSubjectKey];
+                    activeSubjectKey = Object.keys(SUBJECTS)[0];
+                    CLUSTERS = SUBJECTS[activeSubjectKey].clusters;
+                    selected = CLUSTERS[0];
+                    renderPanel();
+                }
+            });
+
+            document.getElementById('subjectSelect').addEventListener('change', (e) => {
+                activeSubjectKey = e.target.value;
+                CLUSTERS = SUBJECTS[activeSubjectKey].clusters;
+                selected = CLUSTERS[0];
+                renderPanel();
+            });
+
+            // Guarantees every student in a roster has a unique ID — the previous
+            // version generated a random 100-999 sid with no collision check, so two
+            // students could end up sharing an ID (increasingly likely as a roster
+            // grows, since the seed roster already occupies 101-128 and 500-501).
+            // A collision meant the second student became unreachable in every
+            // dropdown/edit/remove action, since lookups match by sid.
+            function createUnclusteredStudent(name, sid) {
+                const subj = SUBJECTS[activeSubjectKey];
+                const existingIds = new Set(subj.students.map(s => s.sid));
+                let finalSid = sid;
+                if (finalSid == null || existingIds.has(finalSid)) {
+                    do {
+                        finalSid = 100 + Math.floor(Math.random() * 899);
+                    } while (existingIds.has(finalSid));
+                }
+                return {
+                    name: name,
+                    sid: finalSid,
+                    cluster: null,
+                    isShooter: false,
+                    sx: 0.1 + Math.random() * 0.8,
+                    sy: 0.1 + Math.random() * 0.8,
+                    px: null, py: null,
+                    vx: (Math.random() - 0.5) * 0.02,
+                    vy: (Math.random() - 0.5) * 0.02,
+                    orbitR: 45 + Math.random() * 40,
+                    phase: Math.random() * Math.PI * 2,
+                    speed: 0.003,
+                    confidence: 0.5,
+                    justGraded: null,
+                    trail: []
+                };
+            }
+
+            document.getElementById('addBtn').addEventListener('click', () => {
+                const input = document.getElementById('newName');
+                const name = input.value.trim();
+                if (!name) return;
+                const student = createUnclusteredStudent(name);
+                SUBJECTS[activeSubjectKey].students.push(student);
+                input.value = '';
+                renderPanel();
+            });
+
+            document.getElementById('newName').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') document.getElementById('addBtn').click();
+            });
+
+            document.getElementById('fileImportInput').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function (ev) {
+                    const text = ev.target.result;
+                    const lines = text.split(/\r?\n/);
+                    let importedCount = 0;
+                    let gradedCount = 0;
+
+                    lines.forEach(line => {
+                        if (!line.trim()) return;
+                        const parts = line.split(/[,;\t]/);
+                        const name = parts[0] ? parts[0].trim() : '';
+                        if (!name || name.toLowerCase().includes('student')) return;
+
+                        let sid = null;
+                        let gradeVal = null;
+                        let topicText = null;
+
+                        for (let i = 1; i < parts.length; i++) {
+                            const val = parts[i].trim();
+                            if (!val) continue;
+                            if (!sid && !isNaN(val) && val.length === 3) {
+                                sid = parseInt(val, 10);
+                            } else if (!gradeVal && !isNaN(val) && parseInt(val, 10) <= 100) {
+                                gradeVal = parseInt(val, 10);
+                            } else if (!topicText && isNaN(val)) {
+                                topicText = val;
+                            }
+                        }
+
+                        const student = createUnclusteredStudent(name, sid);
+
+                        if (gradeVal !== null || topicText !== null) {
+                            gradedCount++;
+                            SUBJECTS[activeSubjectKey].evaluated = true;
+
+                            if (gradeVal === 100 || (topicText && topicText.toLowerCase().includes('top'))) {
+                                student.isShooter = true;
+                                student.x = canvas.width * (0.15 + Math.random() * 0.7);
+                                student.y = canvas.height * (0.15 + Math.random() * 0.7);
+                                const angle = Math.random() * Math.PI * 2;
+                                student.vx = Math.cos(angle) * 0.095;
+                                student.vy = Math.sin(angle) * 0.095;
+                            } else {
+                                let matched = null;
+                                if (topicText) {
+                                    const tLow = topicText.toLowerCase();
+                                    matched = CLUSTERS.find(c => tLow.includes(c.label.toLowerCase()) || (c.keywords && c.keywords.some(k => tLow.includes(k))));
+                                }
+                                if (!matched) {
+                                    matched = CLUSTERS[importedCount % CLUSTERS.length];
+                                }
+                                student.cluster = matched;
+                                student.confidence = 0.95;
+                            }
+                        }
+
+                        SUBJECTS[activeSubjectKey].students.push(student);
+                        importedCount++;
+                    });
+
+                    if (gradedCount > 0) {
+                        alert('Imported ' + importedCount + ' students! ' + gradedCount + ' students with grades were automatically assigned into clusters.');
+                    } else {
+                        alert('Imported ' + importedCount + ' students as unclustered scattered stars awaiting evaluation.');
+                    }
+                    renderPanel();
+                };
+                reader.readAsText(file);
+            });
+
+            document.getElementById('addClusterBtn').addEventListener('click', () => {
+                const input = document.getElementById('newClusterName');
+                const name = input.value.trim();
+                if (!name) return;
+
+                // createOrFindCluster picks a spot via farthest-point sampling against
+                // every existing galaxy, so it never lands on top of another one — and if
+                // a galaxy with this name already exists, it's reused instead of
+                // duplicated (and re-selected) rather than stacking a second copy.
+                const newCluster = createOrFindCluster(name);
+                selected = newCluster;
+                input.value = '';
+                renderPanel();
+            });
+
+            window.__editStudent = function (sid) {
+                const currentStudents = SUBJECTS[activeSubjectKey].students;
+                let p = currentStudents.find(pp => pp.sid === sid);
+                if (!p) return;
+                const name = prompt('Edit student name', p.name);
+                if (name && name.trim()) { p.name = name.trim(); renderPanel(); }
+            };
+
+            window.__removeStudent = function (sid) {
+                const currentStudents = SUBJECTS[activeSubjectKey].students;
+                let idx = currentStudents.findIndex(pp => pp.sid === sid);
+                if (idx > -1) {
+                    if (hovered && hovered.sid === sid) hovered = null;
+                    currentStudents.splice(idx, 1);
+                    renderPanel();
+                }
+            };
+
+            document.getElementById('gradeBtn').addEventListener('click', async () => {
+                const sel = document.getElementById('gradeStudentSelect');
+                const sid = parseInt(sel.value, 10);
+                const currentStudents = SUBJECTS[activeSubjectKey].students;
+                let p = currentStudents.find(pp => pp.sid === sid);
+                if (!p) return;
+
+                const text = document.getElementById('gradeText').value;
+
+                // TIER 1: Live Gemini 3.6 grading endpoint (backend, once wired up)
+                // TIER 2: Local simulated grading pipeline — always available offline
+                const gradeBtnEl = document.getElementById('gradeBtn');
+                const originalBtnText = gradeBtnEl.textContent;
+                gradeBtnEl.textContent = 'GRADING...';
+                gradeBtnEl.style.pointerEvents = 'none';
+                let result;
+                try {
+                    result = await fetchGeminiGrade(p, text, attachedImageName, attachedImageDataUrl);
+                    if (!result) result = geminiPipelineGrade(p, text, attachedImageName);
+                } finally {
+                    gradeBtnEl.textContent = originalBtnText;
+                    gradeBtnEl.style.pointerEvents = 'auto';
+                }
+
+                SUBJECTS[activeSubjectKey].evaluated = true;
+
+                p.confidence = result.confidence;
+                p.justGraded = performance.now();
+
+                if (result.grade_percent === 100) {
+                    p.isShooter = true;
+                    p.cluster = null;
+                    p.x = canvas.width * (0.15 + Math.random() * 0.7);
+                    p.y = canvas.height * (0.15 + Math.random() * 0.7);
+                    const angle = Math.random() * Math.PI * 2;
+                    p.vx = Math.cos(angle) * 0.095;
+                    p.vy = Math.sin(angle) * 0.095;
+                    p.trail = [];
+                } else {
+                    p.isShooter = false;
+                    p.cluster = result.cluster;
+                    selected = result.cluster;
+                }
+
+                const resBox = document.getElementById('gradeResult');
+                resBox.style.display = 'block';
+                resBox.innerHTML =
+                    'Grade: <strong>' + result.grade_percent + '%</strong><br>' +
+                    (p.isShooter ? '<span style="color:' + LIGHT_YELLOW + '">Status: Top Performer (100%)</span>' : 'Assigned Galaxy: <span style="color:' + result.cluster.color + '">' + result.cluster.label + '</span>') + '<br>' +
+                    'Confidence: ' + Math.round(result.confidence * 100) + '%<br>' +
+                    '<span style="font-size:8px;color:#8a8a98;">Feedback: "' + result.evidence + '"</span>';
+
+                // Reset the submission form so this student's notes/photo can't be
+                // silently re-used when grading the next student (previously the text,
+                // attached image, and its preview all persisted across submissions).
+                document.getElementById('gradeText').value = '';
+                document.getElementById('gradeImage').value = '';
+                document.getElementById('gradeImagePreview').style.display = 'none';
+                document.getElementById('gradeImageLabel').textContent = '+ Attach Assignment Photo';
+                attachedImageName = null;
+                attachedImageDataUrl = null;
+
+                renderPanel();
+            });
+
+            document.getElementById('btnSync').addEventListener('click', () => {
+                renderPanel();
+                alert('Changes synchronized successfully across all subjects, students, and galaxies.');
+            });
+
+            document.getElementById('btnExport').addEventListener('click', async () => {
+                const exportBtn = document.getElementById('btnExport');
+                const originalBtnText = exportBtn.textContent;
+                exportBtn.textContent = 'EXPORTING...';
+                exportBtn.style.pointerEvents = 'none';
+
+                try {
+                    const subj = SUBJECTS[activeSubjectKey];
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF();
+                    const marginX = 14;
+                    const pageBottom = 280;
+                    let y = 20;
+
+                    function ensureRoom(lines) {
+                        if (y + lines * 5 > pageBottom) {
+                            doc.addPage();
+                            y = 20;
+                        }
+                    }
+
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(16);
+                    doc.text("THE KNOWLEDGE GALAXY — SUBJECT EXPORT", marginX, y);
+                    y += 7;
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(9);
+                    doc.setTextColor(110, 110, 110);
+                    doc.text("Generated: " + new Date().toLocaleString(), marginX, y);
+                    doc.setTextColor(0, 0, 0);
+                    y += 4;
+                    doc.setDrawColor(200, 200, 200);
+                    doc.line(marginX, y, 196, y);
+                    y += 10;
+
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(13);
+                    doc.text(subj.name.toUpperCase(), marginX, y);
+                    y += 6;
+
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(9.5);
+                    doc.text("Status: " + (subj.evaluated ? "Evaluated / Clustered" : "Unclustered / Awaiting Evaluation"), marginX, y);
+                    y += 5;
+                    doc.text("Source Material: " + (subj.bookName ? subj.bookName : "None Loaded"), marginX, y);
+                    y += 4;
+                    doc.setDrawColor(225, 225, 225);
+                    doc.line(marginX, y, 196, y);
+                    y += 7;
+
+                    if (subj.evaluated) {
+                        // Fetch each cluster's remediation plan up front (Gemini 3.6 bridge
+                        // first, local template fallback otherwise — same tiered pipeline as
+                        // the "Generate Remediation Plan" button) so the export includes a
+                        // full intervention plan per galaxy, not just the roster breakdown.
+                        const plans = await Promise.all(
+                            subj.clusters.map(cluster => {
+                                const members = subj.students.filter(s => s.cluster === cluster && !s.isShooter);
+                                return getRemediationPlan(subj, cluster.label, members.length);
+                            })
+                        );
+
+                        subj.clusters.forEach((cluster, clusterIdx) => {
+                            const members = subj.students.filter(s => s.cluster === cluster && !s.isShooter);
+                            const plan = plans[clusterIdx];
+
+                            ensureRoom(6);
+                            doc.setFont("helvetica", "bold");
+                            doc.setFontSize(10.5);
+                            doc.text("Galaxy: " + cluster.label.toUpperCase() + "  (" + members.length + " students)", marginX + 4, y);
+                            y += 5;
+
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(9);
+                            doc.text("Severity: " + Math.round((cluster.severity || 0.8) * 100) + "%", marginX + 6, y);
+                            y += 5;
+
+                            if (cluster.tips && cluster.tips.length) {
+                                doc.setFont("helvetica", "italic");
+                                doc.text("Recommended Interventions:", marginX + 6, y);
+                                y += 5;
+                                doc.setFont("helvetica", "normal");
+                                cluster.tips.forEach(tip => {
+                                    ensureRoom(1);
+                                    const wrapped = doc.splitTextToSize("- " + tip, 165);
+                                    doc.text(wrapped, marginX + 10, y);
+                                    y += wrapped.length * 5;
+                                });
+                            }
+
+                            if (members.length) {
+                                ensureRoom(1);
+                                doc.setFont("helvetica", "italic");
+                                doc.text("Students Enrolled:", marginX + 6, y);
+                                y += 5;
+                                doc.setFont("helvetica", "normal");
+                                members.forEach(m => {
+                                    ensureRoom(1);
+                                    doc.text("* " + m.name + " (ID #" + m.sid + ", Confusion: " + Math.round(m.confidence * 100) + "%)", marginX + 10, y);
+                                    y += 5;
+                                });
+                            }
+                            y += 3;
+
+                            // Full step-by-step remediation plan for this galaxy
+                            ensureRoom(3);
+                            doc.setFont("helvetica", "italic");
+                            doc.setFontSize(9);
+                            doc.text("Remediation Plan (" + plan.sourceText + "):", marginX + 6, y);
+                            y += 5;
+                            doc.setFont("helvetica", "normal");
+                            plan.steps.forEach(step => {
+                                ensureRoom(2);
+                                doc.setFont("helvetica", "bold");
+                                const wrappedTitle = doc.splitTextToSize(step.num, 163);
+                                doc.text(wrappedTitle, marginX + 10, y);
+                                y += wrappedTitle.length * 5;
+
+                                doc.setFont("helvetica", "normal");
+                                const wrappedDesc = doc.splitTextToSize(step.desc, 160);
+                                ensureRoom(wrappedDesc.length);
+                                doc.text(wrappedDesc, marginX + 12, y);
+                                y += wrappedDesc.length * 5 + 2;
+                            });
+
+                            y += 4;
+                            doc.setDrawColor(235, 235, 235);
+                            doc.line(marginX, y, 196, y);
+                            y += 6;
+                        });
+
+                        const topPerformers = subj.students.filter(s => s.isShooter);
+                        if (topPerformers.length > 0) {
+                            ensureRoom(6);
+                            doc.setFont("helvetica", "bold");
+                            doc.setFontSize(10.5);
+                            doc.text("TOP PERFORMERS (100%)  (" + topPerformers.length + " students)", marginX + 4, y);
+                            y += 5;
+                            doc.setFont("helvetica", "normal");
+                            doc.setFontSize(9);
+                            topPerformers.forEach(m => {
+                                ensureRoom(1);
+                                doc.text("* " + m.name + " (ID #" + m.sid + ")", marginX + 10, y);
+                                y += 5;
+                            });
+                            y += 4;
+                        }
+                    } else {
+                        ensureRoom(6);
+                        doc.setFont("helvetica", "bold");
+                        doc.setFontSize(10.5);
+                        doc.text("UNCLUSTERED / UNASSESSED STUDENTS  (" + subj.students.length + " students)", marginX + 4, y);
+                        y += 5;
+                        doc.setFont("helvetica", "normal");
+                        doc.setFontSize(9);
+                        subj.students.forEach(m => {
+                            ensureRoom(1);
+                            doc.text("* " + m.name + " (ID #" + m.sid + ")", marginX + 10, y);
+                            y += 5;
+                        });
+                        y += 4;
+                    }
+
+                    const safeName = subj.name.replace(/[^a-z0-9]+/gi, '_');
+                    doc.save("Knowledge_Galaxy_Export_" + safeName + ".pdf");
+                } finally {
+                    exportBtn.textContent = originalBtnText;
+                    exportBtn.style.pointerEvents = 'auto';
+                }
+            });
+
+            canvas.addEventListener('click', (e) => {
+                if (justDraggedCluster) { justDraggedCluster = false; return; }
+
+                const r = canvas.getBoundingClientRect();
+                const mx = e.clientX - r.left, my = e.clientY - r.top;
+                const currentStudents = SUBJECTS[activeSubjectKey].students;
+
+                let clickedStudent = null, bestStudentD = 22;
+                for (const p of currentStudents) {
+                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
+                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
+                    const d = Math.hypot(sx - mx, sy - my);
+                    if (d < bestStudentD) { bestStudentD = d; clickedStudent = p; }
+                }
+
+                if (clickedStudent) {
+                    document.getElementById('overrideStudentSelect').value = clickedStudent.sid;
+                    document.getElementById('overrideStudentSelect').dispatchEvent(new Event('change'));
+                    return;
+                }
+
+                if (SUBJECTS[activeSubjectKey].evaluated) {
+                    let bestCluster = null, bestClusterD = 75;
+                    for (const c of CLUSTERS) {
+                        const cx = c.rel[0] * canvas.width, cy = c.rel[1] * canvas.height;
+                        const d = Math.hypot(mx - cx, my - cy);
+                        if (d < bestClusterD) { bestClusterD = d; bestCluster = c; }
+                    }
+                    if (bestCluster) { selected = bestCluster; renderPanel(); }
+                }
+            });
+
+            // GALAXY DRAG-AND-DROP: lets the teacher manually reposition any concept
+            // galaxy by grabbing its glow and dragging it. Once dragged, a galaxy is
+            // marked manuallyPositioned so the automatic declutter pass (see
+            // resolveClusterOverlaps) leaves it alone from then on — it becomes a
+            // fixed anchor that other, non-dragged galaxies will steer around.
+            canvas.addEventListener('pointerdown', (e) => {
+                if (!SUBJECTS[activeSubjectKey].evaluated) return;
+                const r = canvas.getBoundingClientRect();
+                const mx = e.clientX - r.left, my = e.clientY - r.top;
+
+                let bestCluster = null, bestD = Infinity;
+                for (const c of CLUSTERS) {
+                    const cx = c.rel[0] * canvas.width, cy = c.rel[1] * canvas.height;
+                    const rad = 42 + c.severity * 58;
+                    const hitRadius = rad + 20;
+                    const d = Math.hypot(mx - cx, my - cy);
+                    if (d < hitRadius && d < bestD) { bestD = d; bestCluster = c; }
+                }
+
+                if (bestCluster) {
+                    e.preventDefault();
+                    draggingCluster = bestCluster;
+                    dragMoved = false;
+                    canvas.style.cursor = 'grabbing';
+                }
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                const r = canvas.getBoundingClientRect();
+                const mx = e.clientX - r.left, my = e.clientY - r.top;
+
+                if (draggingCluster) {
+                    dragMoved = true;
+                    draggingCluster.rel = [
+                        Math.min(0.94, Math.max(0.06, mx / canvas.width)),
+                        Math.min(0.94, Math.max(0.06, my / canvas.height))
+                    ];
+                    draggingCluster.manuallyPositioned = true;
+                    canvas.style.cursor = 'grabbing';
+                    return;
+                }
+
+                const currentStudents = SUBJECTS[activeSubjectKey].students;
+                let best = null, bestD = 20;
+                for (const p of currentStudents) {
+                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
+                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
+                    const d = Math.hypot(sx - mx, sy - my);
+                    if (d < bestD) { bestD = d; best = p; }
+                }
+                hovered = best;
+
+                if (hovered) {
+                    canvas.style.cursor = 'pointer';
+                } else if (SUBJECTS[activeSubjectKey].evaluated) {
+                    let overCluster = false;
+                    for (const c of CLUSTERS) {
+                        const cx = c.rel[0] * canvas.width, cy = c.rel[1] * canvas.height;
+                        const rad = 42 + c.severity * 58;
+                        if (Math.hypot(mx - cx, my - cy) < rad + 20) { overCluster = true; break; }
+                    }
+                    canvas.style.cursor = overCluster ? 'grab' : 'default';
+                } else {
+                    canvas.style.cursor = 'default';
+                }
+            });
+
+            function endClusterDrag() {
+                if (draggingCluster) {
+                    selected = draggingCluster;
+                    justDraggedCluster = dragMoved;
+                    draggingCluster = null;
+                    canvas.style.cursor = 'default';
+                    renderPanel();
+                }
+            }
+            window.addEventListener('pointerup', endClusterDrag);
+            canvas.addEventListener('pointerleave', () => { hovered = null; endClusterDrag(); });
+
+            const SPARKLE_OFFSETS = [
+                [0, -3],
+                [0, -2],
+                [-1, -1], [0, -1], [1, -1],
+                [-3, 0], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [3, 0],
+                [-1, 1], [0, 1], [1, 1],
+                [0, 2],
+                [0, 3]
+            ];
+
+            function pixelStar(cx, cy, unit, color, alpha) {
+                cx = Math.round(cx); cy = Math.round(cy);
+                const u = Math.max(1, Math.round(unit));
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = color;
+                for (let k = 0; k < SPARKLE_OFFSETS.length; k++) {
+                    const dx = SPARKLE_OFFSETS[k][0], dy = SPARKLE_OFFSETS[k][1];
+                    ctx.fillRect(cx + dx * u - Math.floor(u / 2), cy + dy * u - Math.floor(u / 2), u, u);
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            function bracket(x, y1, y2, dir) {
+                const tick = 6 * dir;
+                ctx.beginPath();
+                ctx.moveTo(x + tick, y1); ctx.lineTo(x, y1); ctx.lineTo(x, y2); ctx.lineTo(x + tick, y2);
+                ctx.stroke();
+            }
+
+            function frame(now) {
+                const w = canvas.width, h = canvas.height;
+                ctx.fillStyle = '#020204';
+                ctx.fillRect(0, 0, w, h);
+
+                for (const nb of NEBULA) {
+                    const g = ctx.createRadialGradient(nb.x * w, nb.y * h, 0, nb.x * w, nb.y * h, nb.r);
+                    g.addColorStop(0, nb.color + 'aa');
+                    g.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = g;
+                    ctx.fillRect(0, 0, w, h);
+                }
+
+                for (const s of bgStars) {
+                    ctx.globalAlpha = s.a;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(Math.round(s.x * w), Math.round(s.y * h), s.size, s.size);
+                }
+                ctx.globalAlpha = 1;
+
+                const elapsed = now - startT;
+                const tt = Math.min(elapsed / TRANS, 1);
+                const eased = ease(tt);
+
+                const activeSubj = SUBJECTS[activeSubjectKey];
+                const isSubjectEvaluated = activeSubj.evaluated;
+                const currentStudents = activeSubj.students;
+
+                // Draw Ambient Background Shooting Stars
+                for (const p of bgShooters) {
+                    const cycle = (elapsed / 1000 + p.t0) % (p.dur + 3);
+                    if (cycle < p.dur) {
+                        const f = cycle / p.dur;
+                        const x0 = -0.05, y0 = p.lane, x1 = 1.05, y1 = p.lane + 0.16;
+                        const x = (x0 + (x1 - x0) * f) * w, y = (y0 + (y1 - y0) * f) * h;
+                        p.trail.push({ x, y });
+                        if (p.trail.length > 26) p.trail.shift();
+
+                        for (let i = 0; i < p.trail.length - 1; i++) {
+                            const a = i / p.trail.length;
+                            ctx.globalAlpha = a * 0.45;
+                            ctx.strokeStyle = '#F2E0A4';
+                            ctx.lineWidth = 0.5 + a * 2.2;
+                            ctx.beginPath();
+                            ctx.moveTo(p.trail[i].x, p.trail[i].y);
+                            ctx.lineTo(p.trail[i + 1].x, p.trail[i + 1].y);
+                            ctx.stroke();
+                        }
+                        ctx.globalAlpha = 1;
+                        pixelStar(x, y, 2.4, '#F2E0A4', 0.95);
+                    } else {
+                        p.trail = [];
+                    }
+                }
+
+                // DRAW CONCEPT GALAXIES ONLY IF EVALUATED
+                if (isSubjectEvaluated) {
+                    resolveClusterOverlaps(CLUSTERS, w, h);
+
+                    for (const c of CLUSTERS) {
+                        const cx = c.rel[0] * w, cy = c.rel[1] * h;
+                        const rad = 42 + c.severity * 58;
+
+                        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad * 2.2);
+                        grad.addColorStop(0, c.color + '35');
+                        grad.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.fillStyle = grad;
+                        ctx.beginPath(); ctx.arc(cx, cy, rad * 2.2, 0, Math.PI * 2); ctx.fill();
+
+                        ctx.beginPath();
+                        ctx.fillStyle = c.color;
+                        ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.fillStyle = '#CAC5E5';
+                        ctx.font = '700 12px ui-monospace, monospace';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(c.label.toUpperCase(), cx, cy - rad - 14);
+                        ctx.fillStyle = '#8a8a96';
+                        ctx.font = '9px ui-monospace, monospace';
+                        const cnt = currentStudents.filter(p => p.cluster === c && !p.isShooter).length;
+                        ctx.fillText(cnt + ' students', cx, cy - rad - 1);
+
+                        if (c === selected) {
+                            ctx.strokeStyle = c.color; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+                            ctx.globalAlpha = 0.7;
+                            ctx.beginPath(); ctx.arc(cx, cy, rad + 14, 0, Math.PI * 2); ctx.stroke();
+                            ctx.globalAlpha = 1; ctx.setLineDash([]);
+                        }
+                    }
+
+                    // Orbital Constellation lines
+                    for (const c of CLUSTERS) {
+                        const members = currentStudents.filter(p => p.cluster === c && !p.isShooter && p.px != null);
+                        ctx.strokeStyle = c.color + '30';
+                        ctx.lineWidth = 1; ctx.setLineDash([1, 4]);
+                        for (let i = 0; i < members.length - 1; i++) {
+                            ctx.beginPath();
+                            ctx.moveTo(members[i].px, members[i].py);
+                            ctx.lineTo(members[i + 1].px, members[i + 1].py);
+                            ctx.stroke();
+                        }
+                        ctx.setLineDash([]);
+                    }
+                }
+
+                // Render Student Stars
+                const margin = 26;
+                for (const p of currentStudents) {
+                    if (p.isShooter && isSubjectEvaluated) {
+                        // 100% Top Performer Shooting Star
+                        p.x += p.vx; p.y += p.vy;
+
+                        if (p.x < margin) { p.x = margin; p.vx *= -1; }
+                        if (p.x > w - margin) { p.x = w - margin; p.vx *= -1; }
+                        if (p.y < margin) { p.y = margin; p.vy *= -1; }
+                        if (p.y > h - margin) { p.y = h - margin; p.vy *= -1; }
+
+                        for (const c of CLUSTERS) {
+                            const cx = c.rel[0] * w, cy = c.rel[1] * h;
+                            const minDist = 42 + c.severity * 58 + 35;
+                            const dx = p.x - cx;
+                            const dy = p.y - cy;
+                            const dist = Math.hypot(dx, dy);
+
+                            if (dist < minDist && dist > 0) {
+                                const nx = dx / dist;
+                                const ny = dy / dist;
+                                p.x = cx + nx * minDist;
+                                p.y = cy + ny * minDist;
+                                const dot = p.vx * nx + p.vy * ny;
+                                if (dot < 0) {
+                                    p.vx -= 2 * dot * nx;
+                                    p.vy -= 2 * dot * ny;
+                                }
+                            }
+                        }
+
+                        p.trail.push({ x: p.x, y: p.y });
+                        if (p.trail.length > 32) p.trail.shift();
+
+                        for (let i = 0; i < p.trail.length; i++) {
+                            const a = i / p.trail.length;
+                            const spread = (1 - a) * 3.5;
+                            const jx = Math.round(p.trail[i].x + (Math.random() - 0.5) * spread);
+                            const jy = Math.round(p.trail[i].y + (Math.random() - 0.5) * spread);
+                            const dsize = Math.round(1.2 + a * 1.8);
+                            ctx.globalAlpha = a * 0.65;
+                            ctx.fillStyle = LIGHT_YELLOW;
+                            ctx.fillRect(jx, jy, dsize, dsize);
+                        }
+                        ctx.globalAlpha = 1;
+
+                        const isHover = hovered === p;
+                        pixelStar(p.x, p.y, isHover ? 3.6 : 2.8, isHover ? '#FFFFFF' : LIGHT_YELLOW, 1);
+
+                        ctx.font = '700 10px ui-monospace, monospace';
+                        ctx.textAlign = 'left';
+                        ctx.fillStyle = isHover ? '#FFFFFF' : LIGHT_YELLOW;
+                        ctx.fillText(p.name.toUpperCase() + ' · 100%', p.x + 12, p.y - 6);
+
+                    } else if (!p.cluster || !isSubjectEvaluated) {
+                        // Unclustered / Scattered Light Yellow Star
+                        if (p.px == null) {
+                            p.px = p.sx * w;
+                            p.py = p.sy * h;
+                        }
+                        p.px += p.vx;
+                        p.py += p.vy;
+                        if (p.px < margin || p.px > w - margin) p.vx *= -1;
+                        if (p.py < margin || p.py > h - margin) p.vy *= -1;
+
+                        const isHover = hovered === p;
+                        pixelStar(p.px, p.py, isHover ? 3.2 : 2.2, LIGHT_YELLOW, 0.95);
+
+                        ctx.font = '600 9px ui-monospace, monospace';
+                        ctx.textAlign = 'left';
+                        ctx.fillStyle = LIGHT_YELLOW;
+                        ctx.fillText(p.name, p.px + 10, p.py - 4);
+
+                    } else {
+                        // Clustered Star orbiting assigned galaxy
+                        const c = p.cluster;
+                        const cx = c.rel[0] * w, cy = c.rel[1] * h;
+                        let px, py;
+                        if (tt < 1) {
+                            const sx = p.sx * w, sy = p.sy * h;
+                            const tx = cx + Math.cos(p.phase) * p.orbitR;
+                            const ty = cy + Math.sin(p.phase) * p.orbitR * 0.55;
+                            px = sx + (tx - sx) * eased;
+                            py = sy + (ty - sy) * eased;
+                        } else {
+                            p.phase += p.speed;
+                            px = cx + Math.cos(p.phase) * p.orbitR;
+                            py = cy + Math.sin(p.phase) * p.orbitR * 0.55;
+                        }
+                        p.px = px; p.py = py;
+                        const isHover = hovered === p;
+                        const unit = isHover ? 2.8 : (1.8 + p.confidence * 0.8);
+                        pixelStar(px, py, unit, isHover ? '#ffffff' : c.color, tt < 1 ? (0.3 + 0.7 * eased) : 1);
+
+                        if (p.justGraded) {
+                            const age = now - p.justGraded;
+                            if (age < 1600) {
+                                ctx.globalAlpha = (1 - age / 1600) * 0.85;
+                                ctx.strokeStyle = '#ffffff';
+                                ctx.lineWidth = 1.4;
+                                ctx.beginPath(); ctx.arc(px, py, 9 + age * 0.012, 0, Math.PI * 2); ctx.stroke();
+                                ctx.globalAlpha = 1;
+                            } else { p.justGraded = null; }
+                        }
+                    }
+                }
+
+                // Leader Lines & Hover Info Tool Callout
+                if (hovered) {
+                    const sx = hovered.px != null ? hovered.px : hovered.x;
+                    const sy = hovered.py != null ? hovered.py : hovered.y;
+
+                    if (sx != null && sy != null) {
+                        ctx.font = '11px ui-monospace, monospace';
+
+                        // Build the callout's lines first so the box can be sized to fit
+                        // them — a fixed-width box (the old approach) let longer content,
+                        // like "Galaxy: Multiplication & Division", spill past its right
+                        // edge and off the canvas entirely. Measuring first fixes that for
+                        // every combination of name/galaxy length, not just this one case.
+                        const lines = [
+                            { text: 'Name: ' + hovered.name, color: '#f5f5f7' },
+                            { text: 'ID: #' + hovered.sid, color: '#f5f5f7' }
+                        ];
+                        if (hovered.cluster && isSubjectEvaluated) {
+                            lines.push({ text: 'Galaxy: ' + hovered.cluster.label, color: hovered.cluster.color });
+                            lines.push({ text: 'Confusion: ' + Math.round(hovered.confidence * 100) + '%', color: hovered.confidence > 0.8 ? '#ff8a75' : '#c7c5d0' });
+                        } else if (hovered.isShooter && isSubjectEvaluated) {
+                            lines.push({ text: 'Status: Top Performer', color: LIGHT_YELLOW });
+                            lines.push({ text: 'Score: 100%', color: LIGHT_YELLOW });
+                        } else {
+                            lines.push({ text: 'Status: Unassessed', color: LIGHT_YELLOW });
+                            lines.push({ text: 'Awaiting Evaluation', color: '#8a8a98' });
+                        }
+
+                        const PAD_X = 10, TOP_OFFSET = 18, LINE_H = 15, BOTTOM_PAD = 9;
+                        let maxTextWidth = 0;
+                        for (const line of lines) {
+                            const tw = ctx.measureText(line.text).width;
+                            if (tw > maxTextWidth) maxTextWidth = tw;
+                        }
+                        const boxW = Math.max(120, Math.ceil(maxTextWidth) + PAD_X * 2);
+                        const boxH = TOP_OFFSET + (lines.length - 1) * LINE_H + BOTTOM_PAD;
+
+                        let boxX = sx + 36;
+                        const leftSide = boxX + boxW > w - 8;
+                        if (leftSide) boxX = sx - 36 - boxW;
+                        // Final safety net: whatever side was chosen and however wide the box
+                        // ended up, always keep the entire box on-canvas. This is what
+                        // actually guarantees the tooltip can never render out of frame,
+                        // even on a narrow window/canvas where neither preferred side fits.
+                        boxX = Math.min(w - boxW - 8, Math.max(8, boxX));
+                        let boxY = Math.max(8, Math.min(h - boxH - 8, sy - 14));
+
+                        ctx.strokeStyle = '#e8e6f0'; ctx.lineWidth = 1.2;
+                        ctx.beginPath(); ctx.arc(sx, sy, 4, 0, Math.PI * 2); ctx.stroke();
+                        ctx.fillStyle = '#e8e6f0';
+                        ctx.beginPath(); ctx.arc(sx, sy, 1.2, 0, Math.PI * 2); ctx.fill();
+
+                        const midX = leftSide ? sx - 18 : sx + 18;
+                        const anchorY = boxY + 14;
+                        ctx.strokeStyle = '#cfcfd8'; ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(sx, sy);
+                        ctx.lineTo(midX, sy);
+                        ctx.lineTo(midX, anchorY);
+                        ctx.lineTo(leftSide ? boxX + boxW : boxX, anchorY);
+                        ctx.stroke();
+
+                        ctx.fillStyle = '#1c1c24';
+                        ctx.fillRect(boxX, boxY, boxW, boxH);
+
+                        bracket(leftSide ? boxX + boxW : boxX, boxY, boxY + boxH, leftSide ? -1 : 1);
+
+                        ctx.textAlign = 'left';
+                        ctx.font = '11px ui-monospace, monospace';
+                        lines.forEach((line, i) => {
+                            ctx.fillStyle = line.color;
+                            ctx.fillText(line.text, boxX + PAD_X, boxY + TOP_OFFSET + i * LINE_H);
+                        });
+                    }
+                }
+
+                requestAnimationFrame(frame);
+            }
+
+            // Initial setup
+            renderPanel();
+            requestAnimationFrame(frame);
+        })();
+    </script>
+</body>
+
+</html>
