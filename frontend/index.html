@@ -104,6 +104,24 @@
                 border-top: 1px solid #2d2d38;
                 padding: 16px 14px 28px;
             }
+
+            .cmd-btn {
+                padding: 14px 0;
+                font-size: 13px;
+            }
+
+            .sec-btn,
+            #addBtn,
+            #gradeBtn,
+            #addClusterBtn,
+            #fileImportLabel,
+            #bookSourceLabel,
+            #applyOverrideBtn,
+            #genQuizBtn,
+            #genWorksheetBtn {
+                padding: 12px 0;
+                font-size: 12px;
+            }
         }
 
         /* ===== RESPONSIVE: PHONE (iPhone, narrow Android) =====
@@ -119,10 +137,22 @@
                 padding: 14px 12px 32px;
             }
 
-            .cmd-btn,
-            .sec-btn {
-                padding: 12px 0;
-                font-size: 10.5px;
+            .cmd-btn {
+                padding: 16px 0;
+                font-size: 15px;
+            }
+
+            .sec-btn,
+            #addBtn,
+            #gradeBtn,
+            #addClusterBtn,
+            #fileImportLabel,
+            #bookSourceLabel,
+            #applyOverrideBtn,
+            #genQuizBtn,
+            #genWorksheetBtn {
+                padding: 14px 0;
+                font-size: 14px;
             }
 
             input[type="text"],
@@ -268,6 +298,16 @@
             border-radius: 4px;
             outline: none;
             transition: border-color 0.2s;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23CAC5E5'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 16px;
+            padding-right: 28px !important;
         }
 
         input[type="text"]:focus,
@@ -522,55 +562,52 @@
             <div id="panelTitle">Command Panel</div>
 
             <!-- Active Subject Management -->
-            <div class="eyebrow">Active Subject</div>
+            <div class="eyebrow">Subject</div>
             <select id="subjectSelect"></select>
 
             <div class="action-grid" style="margin-top:2px; margin-bottom:8px;">
-                <button class="sec-btn" id="addSubjectBtn">+ Add Subject</button>
-                <button class="sec-btn danger-btn" id="deleteSubjectBtn">Delete Subject</button>
+                <button class="sec-btn" id="addSubjectBtn">+ Add</button>
+                <button class="sec-btn danger-btn" id="deleteSubjectBtn">Delete</button>
             </div>
 
             <!-- Roster Intake -->
             <div class="panel-section">
-                <div class="eyebrow">Roster Intake</div>
+                <div class="eyebrow">Roster</div>
                 <input id="newName" type="text" placeholder="Enter student name...">
                 <div id="addBtn">+ Add Student</div>
 
-                <label id="fileImportLabel" for="fileImportInput" style="margin-top:6px;">Import Roster File
-                    (CSV/TXT)</label>
+                <label id="fileImportLabel" for="fileImportInput" style="margin-top:6px;">Import Roster (CSV/TXT)</label>
                 <input id="fileImportInput" type="file" accept=".csv,.txt">
-                <div class="hint">Files with grades assign directly to clusters. Ungraded files launch scattered stars
-                    awaiting evaluation.</div>
+                <div class="hint">Grades assign to clusters; ungraded launch scattered stars.</div>
             </div>
 
             <!-- Assessment & Evaluation -->
             <div class="panel-section">
-                <div class="eyebrow">Assessment & Evaluation</div>
+                <div class="eyebrow">Evaluation</div>
                 <select id="gradeStudentSelect"></select>
-                <label id="gradeImageLabel" for="gradeImage">+ Attach Assignment Photo</label>
+                <label id="gradeImageLabel" for="gradeImage">+ Attach Photo</label>
                 <input id="gradeImage" type="file" accept="image/*,.pdf">
                 <div id="gradeImagePreview"><img id="gradeImgTag"></div>
                 <textarea id="gradeText" placeholder="Teacher observations or notes..."></textarea>
-                <div id="gradeBtn">Grade with Gemini</div>
+                <div id="gradeBtn">Grade w/ Gemini</div>
                 <div id="gradeResult" style="display:none;"></div>
             </div>
 
             <!-- Manual Student Adjustment & Override -->
             <div class="panel-section">
-                <div class="eyebrow">Manual Student Override</div>
+                <div class="eyebrow">Manual Override</div>
                 <select id="overrideStudentSelect"></select>
 
                 <div style="display:flex; align-items:center; gap:6px; margin:4px 0;">
                     <input type="checkbox" id="topStudentCheck" style="width:auto; margin:0;">
-                    <label for="topStudentCheck" style="font-size:9.5px; color:#c7c5d0;">Top Performer (100%)</label>
+                    <label for="topStudentCheck" style="font-size:9.5px; color:#c7c5d0;">Top Performer</label>
                 </div>
 
                 <div id="clusterOverrideGroup">
-                    <label style="font-size:8px; color:#8a8a98; text-transform:uppercase;">Assign Concept Galaxy</label>
+                    <label style="font-size:8px; color:#8a8a98; text-transform:uppercase;">Assign Galaxy</label>
                     <select id="overrideClusterSelect"></select>
 
-                    <label style="font-size:8px; color:#8a8a98; text-transform:uppercase;">Confusion Level (0% -
-                        100%)</label>
+                    <label style="font-size:8px; color:#8a8a98; text-transform:uppercase;">Confusion</label>
                     <input id="overrideConfusionInput" type="number" min="0" max="100" placeholder="e.g. 85">
                 </div>
 
@@ -579,8 +616,8 @@
 
             <!-- Course Source Material & Generator -->
             <div class="panel-section">
-                <div class="eyebrow">Source Material & Content Gen</div>
-                <label id="bookSourceLabel" for="bookSourceInput">Attach Textbook / PDF Source</label>
+                <div class="eyebrow">Content Generation</div>
+                <label id="bookSourceLabel" for="bookSourceInput">Attach Source</label>
                 <input id="bookSourceInput" type="file" accept=".pdf,.txt,.docx,.epub,.csv,.md">
                 <div id="sourceStatus" style="display:none;">Source: None loaded</div>
 
@@ -592,30 +629,30 @@
 
             <!-- Galaxy Inspection & Interventions -->
             <div class="panel-section">
-                <div class="eyebrow">Selected Concept Galaxy</div>
+                <div class="eyebrow">Selected Gap Galaxy</div>
                 <div id="selName">Unclustered Stars</div>
 
-                <div class="eyebrow">Enrolled Students (<span id="selCount">0</span>)</div>
+                <div class="eyebrow">Enrolled (<span id="selCount">0</span>)</div>
                 <div id="selList"></div>
 
-                <div class="eyebrow" style="margin-top:10px;">Recommended Intervention</div>
+                <div class="eyebrow" style="margin-top:10px;">Intervention</div>
                 <ul id="tipsList">
                     <li>Awaiting evaluation to reveal clusters...</li>
                 </ul>
 
-                <button id="genBtn" class="cmd-btn">Generate Remediation Plan</button>
+                <button id="genBtn" class="cmd-btn">Remediate Plan</button>
 
                 <div class="action-grid">
                     <button class="sec-btn" id="btnSync">Sync Changes</button>
-                    <button class="sec-btn" id="btnExport">Export Subject Data</button>
+                    <button class="sec-btn" id="btnExport">Export Data</button>
                 </div>
             </div>
 
             <!-- Custom Concept Creation -->
             <div class="panel-section">
-                <div class="eyebrow">Custom Concept Galaxy</div>
-                <input id="newClusterName" type="text" placeholder="New concept name...">
-                <div id="addClusterBtn">+ Add Concept Galaxy</div>
+                <div class="eyebrow">Custom Gap Galaxy</div>
+                <input id="newClusterName" type="text" placeholder="New gap name...">
+                <div id="addClusterBtn">+ Add Gap Galaxy</div>
             </div>
         </div>
     </div>
@@ -931,7 +968,8 @@
                         if (dist < minDist) {
                             const push = (minDist - dist) * DAMPING;
                             const nx = dx / dist, ny = dy / dist;
-                            const aPinned = !!a.manuallyPositioned, bPinned = !!b.manuallyPositioned;
+                            const aPinned = (draggingCluster === a);
+                            const bPinned = (draggingCluster === b);
 
                             if (!aPinned && !bPinned) {
                                 a.rel[0] -= (nx * push) / w; a.rel[1] -= (ny * push) / h;
@@ -996,7 +1034,7 @@
                     rel: rel,
                     severity: (typeof opts.severity === 'number') ? opts.severity : (0.6 + Math.random() * 0.3),
                     keywords: cleanLabel.toLowerCase().split(/\s+/),
-                    tips: (opts.tips && opts.tips.length) ? opts.tips : ['Interactive concept exercises', 'Peer learning group sessions', 'Targeted remediation worksheets'],
+                    tips: (opts.tips && opts.tips.length) ? opts.tips : ['Interactive gap exercises', 'Peer learning group sessions', 'Targeted remediation worksheets'],
                     autoDiscovered: !!opts.autoDiscovered
                 };
                 CLUSTERS.push(newCluster);
@@ -1057,7 +1095,7 @@
                     const guessedLabel = guessConceptFromText(text);
                     matchedCluster = guessedLabel
                         ? createOrFindCluster(guessedLabel, { autoDiscovered: true })
-                        : (CLUSTERS[Math.floor(Math.random() * CLUSTERS.length)] || createOrFindCluster('Unclassified Concept', { autoDiscovered: true }));
+                        : (CLUSTERS[Math.floor(Math.random() * CLUSTERS.length)] || createOrFindCluster('Unclassified Gap', { autoDiscovered: true }));
                 }
 
                 const grade = isTopScore ? 100 : Math.floor(45 + Math.random() * 48);
@@ -1067,7 +1105,7 @@
                 let evidence;
                 if (text && text.trim()) evidence = text.trim().slice(0, 60);
                 else if (imageName) evidence = 'Analyzed OCR coursework input: ' + imageName;
-                else evidence = 'Verified exact conceptual execution in submitted paperwork';
+                else evidence = 'Verified exact execution in submitted paperwork';
 
                 return {
                     cluster: isTopScore ? null : matchedCluster,
@@ -1121,11 +1159,11 @@
                 if (currentSubj.bookName) {
                     statusBox.style.display = 'block';
                     statusBox.innerHTML = 'Source Ingested:<br><strong style="color:' + LIGHT_YELLOW + '">' + currentSubj.bookName + '</strong>';
-                    bookLabel.textContent = 'Change Source Material';
+                    bookLabel.textContent = 'Change Source';
                 } else {
                     statusBox.style.display = 'none';
                     statusBox.innerHTML = 'Source: None loaded';
-                    bookLabel.textContent = 'Attach Textbook / PDF Source';
+                    bookLabel.textContent = 'Attach Source';
                 }
 
                 if (isEval && selected) {
@@ -1321,9 +1359,17 @@
             // heuristic in generateSourceQuestions() below.
             async function fetchGeminiQuestions(clusterName, type) {
                 if (!GEMINI_BRIDGE_ENABLED) return null;
-                const fileName = slugify(clusterName) + '_' + type + '.json';
                 try {
-                    const res = await fetch(GEMINI_BRIDGE_QUESTIONS_PATH + fileName, { cache: 'no-store' });
+                    const currentSubj = SUBJECTS[activeSubjectKey];
+                    const res = await fetch('https://the-knowledge-galaxy.onrender.com/generate_questions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            subject: currentSubj.name,
+                            cluster: clusterName,
+                            type: type
+                        })
+                    });
                     if (!res.ok) return null;
                     const data = await res.json();
                     const list = Array.isArray(data.questions) ? data.questions : null;
@@ -1331,9 +1377,7 @@
                     const normalized = list.map(normalizeGeminiQuestion).filter(Boolean);
                     return normalized.length > 0 ? normalized : null;
                 } catch (err) {
-                    // Bridge file not present (expected until the Python/Gemini backend is
-                    // wired up) or fetch blocked (e.g. opening the HTML via file://). Either
-                    // way, we fall through to the local generators — never break the demo.
+                    // Bridge call failed or fetch blocked. Fall through to local generators.
                     return null;
                 }
             }
@@ -1353,9 +1397,16 @@
             // rendering format), or null if the plan isn't available yet.
             async function fetchGeminiRemediationPlan(clusterName) {
                 if (!GEMINI_BRIDGE_ENABLED) return null;
-                const fileName = slugify(clusterName) + '.json';
                 try {
-                    const res = await fetch(GEMINI_BRIDGE_REMEDIATION_PATH + fileName, { cache: 'no-store' });
+                    const currentSubj = SUBJECTS[activeSubjectKey];
+                    const res = await fetch('https://the-knowledge-galaxy.onrender.com/generate_remediation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            subject: currentSubj.name,
+                            cluster: clusterName
+                        })
+                    });
                     if (!res.ok) return null;
                     const data = await res.json();
                     const list = Array.isArray(data.steps) ? data.steps : null;
@@ -1422,7 +1473,7 @@
                         });
                     }
                     if (!isTopScore && !matchedCluster) {
-                        matchedCluster = CLUSTERS[0] || createOrFindCluster('Unclassified Concept', { autoDiscovered: true });
+                        matchedCluster = CLUSTERS[0] || createOrFindCluster('Unclassified Gap', { autoDiscovered: true });
                     }
 
                     return {
@@ -1465,7 +1516,7 @@
                 const currentSubj = SUBJECTS[activeSubjectKey];
                 const bName = currentSubj.bookName;
                 const bText = currentSubj.bookText;
-                const target = (clusterName || 'General Concept');
+                const target = (clusterName || 'General Gap');
 
                 let lines = bText ? bText.split(/\r?\n/)
                     .map(l => cleanSourceExcerpt(l))
@@ -1616,7 +1667,7 @@
 
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(10);
-                doc.text("Subject: " + currentSubj.name.toUpperCase() + " | Concept Galaxy: " + targetClusterName.toUpperCase(), 14, 27);
+                doc.text("Subject: " + currentSubj.name.toUpperCase() + " | Gap Galaxy: " + targetClusterName.toUpperCase(), 14, 27);
                 doc.text("Source Alignment: " + sourceLabel, 14, 33);
                 doc.text("Student Name: _______________________   Date: _______________", 14, 39);
 
@@ -1790,7 +1841,7 @@
             }
 
             document.getElementById('genBtn').addEventListener('click', async () => {
-                if (!selected) { alert('Please select a concept galaxy.'); return; }
+                if (!selected) { alert('Please select a gap galaxy.'); return; }
 
                 const currentSubj = SUBJECTS[activeSubjectKey];
                 const targetClusterName = selected.label;
@@ -1865,7 +1916,7 @@
                     bookName: null,
                     bookText: "",
                     clusters: [
-                        { id: key + '_c1', label: name.trim() + ' Fundamentals', color: PALETTE[0], rel: [0.35, 0.48], severity: 0.8, tips: ['Review core concepts'], keywords: [name.trim().toLowerCase(), 'fundamentals', 'basics'] },
+                        { id: key + '_c1', label: name.trim() + ' Fundamentals', color: PALETTE[0], rel: [0.35, 0.48], severity: 0.8, tips: ['Review core gaps'], keywords: [name.trim().toLowerCase(), 'fundamentals', 'basics'] },
                         { id: key + '_c2', label: name.trim() + ' Advanced Topics', color: PALETTE[1], rel: [0.65, 0.52], severity: 0.9, tips: ['Practice complex problems'], keywords: [name.trim().toLowerCase(), 'advanced'] }
                     ],
                     students: [] // FULLY EMPTY ROSTER!
@@ -2111,7 +2162,7 @@
                 document.getElementById('gradeText').value = '';
                 document.getElementById('gradeImage').value = '';
                 document.getElementById('gradeImagePreview').style.display = 'none';
-                document.getElementById('gradeImageLabel').textContent = '+ Attach Assignment Photo';
+                document.getElementById('gradeImageLabel').textContent = '+ Attach Photo';
                 attachedImageName = null;
                 attachedImageDataUrl = null;
 
@@ -2309,6 +2360,10 @@
                     if (d < bestStudentD) { bestStudentD = d; clickedStudent = p; }
                 }
 
+                if (e.pointerType === 'touch') {
+                    hovered = clickedStudent;
+                }
+
                 if (clickedStudent) {
                     document.getElementById('overrideStudentSelect').value = clickedStudent.sid;
                     document.getElementById('overrideStudentSelect').dispatchEvent(new Event('change'));
@@ -2332,6 +2387,20 @@
             // resolveClusterOverlaps) leaves it alone from then on — it becomes a
             // fixed anchor that other, non-dragged galaxies will steer around.
             canvas.addEventListener('pointerdown', (e) => {
+                if (e.pointerType === 'touch') {
+                    const r = canvas.getBoundingClientRect();
+                    const mx = e.clientX - r.left, my = e.clientY - r.top;
+                    const currentStudents = SUBJECTS[activeSubjectKey].students;
+                    let clickedStudent = null, bestStudentD = 22;
+                    for (const p of currentStudents) {
+                        const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
+                        const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
+                        const d = Math.hypot(sx - mx, sy - my);
+                        if (d < bestStudentD) { bestStudentD = d; clickedStudent = p; }
+                    }
+                    hovered = clickedStudent;
+                }
+
                 if (!SUBJECTS[activeSubjectKey].evaluated) return;
                 const r = canvas.getBoundingClientRect();
                 const mx = e.clientX - r.left, my = e.clientY - r.top;
@@ -2365,6 +2434,11 @@
                     ];
                     draggingCluster.manuallyPositioned = true;
                     canvas.style.cursor = 'grabbing';
+                    return;
+                }
+
+                if (e.pointerType === 'touch') {
+                    // Touch moves shouldn't trigger/clear hover states.
                     return;
                 }
 
@@ -2403,7 +2477,12 @@
                 }
             }
             window.addEventListener('pointerup', endClusterDrag);
-            canvas.addEventListener('pointerleave', () => { hovered = null; endClusterDrag(); });
+            canvas.addEventListener('pointerleave', (e) => {
+                if (e && e.pointerType !== 'touch') {
+                    hovered = null;
+                }
+                endClusterDrag();
+            });
 
             const SPARKLE_OFFSETS = [
                 [0, -3],

@@ -167,7 +167,7 @@ def generate_structured_json(contents: Any, response_schema: Any, model_name: st
         # Strip all 'default' keys because google-generativeai SDK doesn't support them
         schema_dict = clean_schema(schema_dict)
 
-    fallback_models = ["gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-2.5-pro"]
+    fallback_models = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-2.5-pro"]
     if model_name not in fallback_models:
         fallback_models.insert(0, model_name)
 
@@ -190,7 +190,7 @@ def generate_structured_json(contents: Any, response_schema: Any, model_name: st
 
     # If all structured schema attempts failed, attempt fallback without schema validation
     print("Attempting fallback generation without schema validation...")
-    for model_attempt in ["gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-2.5-pro"]:
+    for model_attempt in ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-2.5-pro"]:
         try:
             model = genai.GenerativeModel(model_attempt)  # type: ignore
             response = model.generate_content(
