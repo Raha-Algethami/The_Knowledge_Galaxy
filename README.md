@@ -4,6 +4,9 @@ A real-time, physics-based classroom dashboard that takes a student's graded ass
 
 With implemented Gemini-powered grading, classification, and content generation to automatically evaluate coursework, discover concept clusters, and route each student's star into the correct galaxy in real time.
 
+## LIVE DEMO
+https://the-knowledge-galaxy-web.onrender.com/
+
 ## How to Use
 
 1. **Installation:** Ensure you have the required libraries listed in `requirements.txt`. (You can install them by running `pip install -r requirements.txt` inside the `backend` folder.) Then add your Gemini API key to `backend/.env` as `GEMINI_API_KEY=your_key_here`.
