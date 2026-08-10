@@ -1,0 +1,49 @@
+{
+  "subject": "Mathematics",
+  "misconception_cluster": "Addition & Subtraction",
+  "target_misconception": "Subtracting the smaller digit from the larger digit in multi-digit subtraction regardless of position (e.g., calculating 52 - 27 as 35 because 7 - 2 = 5 and 5 - 2 = 3).",
+  "remediation_plan": [
+    {
+      "step_number": 1,
+      "title": "Diagnostic Probe: Uncovering Place Value Disconnect in Subtraction",
+      "phase": "Diagnostic Analysis",
+      "description": "Assess whether the student treats digits in multi-digit numbers as isolated single-digit values rather than quantities tied to place value positions.",
+      "teacher_actions": "Present three contrastive subtraction problems (e.g., 58 - 23, 52 - 27, and 50 - 24) and ask the student to solve them while thinking aloud. Note specifically if the student reverses subtraction order in the ones column when the minuend's digit is smaller than the subtrahend's digit.",
+      "student_actions": "Solve the equations out loud, explaining the step-by-step logic used when encountering a smaller digit on top in a column."
+    },
+    {
+      "step_number": 2,
+      "title": "Base-Ten Block Unbundling: Concrete Re-Teaching of Regrouping",
+      "phase": "Re-teaching (Alternative Modality)",
+      "description": "Use physical base-ten blocks on a Place Value Mat to demonstrate that multi-digit numbers represent whole quantities and that 1 Ten can be traded for 10 Ones when more ones are needed.",
+      "teacher_actions": "Build 52 using 5 ten-rods and 2 unit-cubes on a place value mat. Ask the student to physically remove 7 unit-cubes. When the student realizes there are only 2 ones available, guide them to exchange 1 ten-rod for 10 unit-cubes, showing that 52 is now represented as 4 tens and 12 ones.",
+      "student_actions": "Physically trade 1 ten-rod for 10 unit-cubes on the mat, recount the total value to confirm it still equals 52, and then subtract 7 ones and 2 tens from the physical mat."
+    },
+    {
+      "step_number": 3,
+      "title": "Scaffolded Dual-Representation Practice",
+      "phase": "Guided Practice",
+      "description": "Bridge the gap between concrete manipulatives and the abstract written algorithm using visual place-value charts alongside written notation.",
+      "teacher_actions": "Provide subtraction problems on a graphic organizer with side-by-side columns for pictorial representation (drawing tens/ones) and algorithmic notation. Prompt with targeted questions: 'Do you have enough ones in the top number? What do we need to regroup?' Fade verbal prompts as the student progresses.",
+      "student_actions": "Draw the starting number using visual quick-tens and ones, cross out and regroup a ten when needed, and simultaneously record the slash-and-write notation on the standard vertical algorithm."
+    },
+    {
+      "step_number": 4,
+      "title": "Spot the Bug: Error Analysis & Peer/Individual Practice",
+      "phase": "Peer or Individual Practice",
+      "description": "Deepen conceptual understanding by requiring the student to identify, explain, and correct the specific 'smaller-from-larger' error in sample student work.",
+      "teacher_actions": "Provide a 'Spot the Bug' worksheet featuring solved subtraction problems—some solved correctly and others containing the target misconception. Facilitate peer discussion or individual reflection on why flipping the digits changes the problem.",
+      "student_actions": "Review the sample work, circle incorrect steps where digits were subtracted in reverse order, explain in writing or to a peer why the answer is incorrect, and solve the problem correctly."
+    },
+    {
+      "step_number": 5,
+      "title": "Mixed-Operation Re-Assessment & Addition Verification",
+      "phase": "Re-assessment",
+      "description": "Evaluate if the student can accurately determine when regrouping is necessary and apply self-checking strategies using the inverse relationship of addition.",
+      "teacher_actions": "Administer a 5-item assessment containing a mix of subtraction problems (some requiring regrouping, some not). Require the student to check each answer using addition.",
+      "student_actions": "Complete the assessment independently, correctly identifying which problems require regrouping, and verify each difference by adding it to the subtrahend."
+    }
+  ],
+  "cluster": "Addition & Subtraction",
+  "generated_by": "gemini-3.6-flash"
+}

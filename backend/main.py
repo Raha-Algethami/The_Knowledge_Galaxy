@@ -84,6 +84,10 @@ class GradeRequest(BaseModel):
     image_name: Optional[str] = None
     image_base64: Optional[str] = None
     image_mime_type: Optional[str] = None
+    existing_gaps: Optional[List[str]] = Field(
+        default=None,
+        description="Existing misconception galaxy labels already identified for this subject. Reuse one exactly if it matches."
+    )
 
 class ErrorItem(BaseModel):
     topic: str
@@ -293,13 +297,28 @@ async def grade_assignment(req: GradeRequest) -> Any:
         textbook_grounding = f"\nReferenced Textbook content:\n{textbook_info['text'][:12000]}\n"
 
     # Construct the instruction prompt
+    # Build existing-gaps guidance so Gemini reuses exact cluster names instead
+    # of inventing a near-duplicate each time the same misconception recurs.
+    existing_gaps_guidance = ""
+    if req.existing_gaps and len(req.existing_gaps) > 0:
+        gaps_list = ", ".join(f'"{g}"' for g in req.existing_gaps)
+        existing_gaps_guidance = f"""
+Existing misconception categories already identified for {req.subject}:
+{gaps_list}
+
+CRITICAL: If the student's primary error clearly matches one of the existing categories above,
+you MUST return that EXACT label as `assigned_cluster`, copied character-for-character
+(including capitalisation and spacing). Only create a brand-new label if the misconception
+is genuinely different from every category in the list above.
+"""
+
     prompt = f"""You are an expert grading assistant assessing student submissions.
 Subject: {req.subject}
 Student Name: {req.student_name or 'Unknown'}
 Student ID: {req.student_id or 'N/A'}
 Teacher's Observations/Notes: {req.notes}
 {textbook_grounding}
-
+{existing_gaps_guidance}
 If an image is attached, analyze the handwritten or typed work in the image. Integrate your observations with the teacher's notes.
 
 Requirements:
@@ -312,7 +331,7 @@ Requirements:
    - Assess the `severity` (0-100).
    - Set your `confidence` (0.0-1.0).
    - Quote or paraphrase the `evidence` of this error from the teacher's notes or the image.
-5. If the student has errors (grade < 100), identify the primary misconception and label it as `assigned_cluster`. This cluster name should be a concise, descriptive name of the misconception, in the words of a professional teacher (e.g., "Denominator Addition Error", "Recursion Stack Overflow", "Off-by-One Loop Boundary"). Do NOT pick from any predefined list; write a brand-new name that fits the error.
+5. If the student has errors (grade < 100), identify the primary misconception and label it as `assigned_cluster`. If it matches an existing category from the list above, use that exact label. Otherwise write a concise, descriptive name in the words of a professional teacher (e.g., "Denominator Addition Error", "Recursion Stack Overflow", "Off-by-One Loop Boundary").
 6. Provide exactly 3 actionable, high-quality recommended interventions in `recommended_interventions` to help the student overcome this specific misconception.
 
 You must return a JSON object that strictly adheres to the requested schema.

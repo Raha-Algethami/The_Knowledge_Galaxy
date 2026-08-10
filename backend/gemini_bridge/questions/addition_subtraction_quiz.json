@@ -1,0 +1,62 @@
+{
+  "cluster": "Addition & Subtraction",
+  "type": "quiz",
+  "questions": [
+    {
+      "question": "What is the first step in solving the linear equation 2x + 5 = 13 based on the general form ax + b = c?",
+      "options": [
+        "Divide both sides by 2",
+        "Subtract 5 from both sides",
+        "Add 5 to both sides",
+        "Multiply both sides by 2"
+      ],
+      "correct_index": 1,
+      "explanation": "For an equation of the form ax + b = c, the first step to isolate the variable is to subtract b from both sides. In 2x + 5 = 13, b is 5, so you subtract 5 from both sides."
+    },
+    {
+      "question": "When solving 3x + 7 = 22, what equation results after subtracting the constant term from both sides?",
+      "options": [
+        "3x = 29",
+        "3x = 15",
+        "x = 15",
+        "3x = 22"
+      ],
+      "correct_index": 1,
+      "explanation": "Subtracting 7 from both sides gives 3x + 7 - 7 = 22 - 7, which simplifies to 3x = 15."
+    },
+    {
+      "question": "In the equation 4x - 6 = 10, what addition or subtraction operation is needed first to isolate the variable term 4x?",
+      "options": [
+        "Subtract 6 from both sides",
+        "Add 6 to both sides",
+        "Subtract 10 from both sides",
+        "Add 4 to both sides"
+      ],
+      "correct_index": 1,
+      "explanation": "To undo subtracting 6 and isolate the variable term, add 6 to both sides of the equation."
+    },
+    {
+      "question": "Why must you perform the exact same addition or subtraction step on both sides of an equation?",
+      "options": [
+        "To maintain equality and keep the equation balanced",
+        "To remove the variable from the equation",
+        "To make the coefficient a equal to 1 immediately",
+        "To eliminate the need to check the solution"
+      ],
+      "correct_index": 0,
+      "explanation": "Applying the same operation to both sides keeps the equation balanced, ensuring the equality remains true as you isolate the variable."
+    },
+    {
+      "question": "According to the solving procedure for linear equations, what should you do after finding a proposed value for the variable?",
+      "options": [
+        "Subtract b again to double-check",
+        "Always verify your solution",
+        "Multiply by a to clear the fraction",
+        "Round the answer to the nearest whole number"
+      ],
+      "correct_index": 1,
+      "explanation": "The procedure states that you should always verify your solution to confirm that the calculated value makes the original equation true."
+    }
+  ],
+  "generated_by": "gemini-3.6-flash"
+}

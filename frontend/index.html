@@ -417,6 +417,56 @@
             border-radius: 4px;
         }
 
+        /* ===== RESIZABLE PANEL HANDLE =====
+     A thin 5px drag strip between the canvas and command panel on desktop,
+     flips to a horizontal strip in the stacked mobile layout. */
+        #resizeHandle {
+            width: 5px;
+            background: #22222a;
+            cursor: col-resize;
+            flex-shrink: 0;
+            transition: background 0.2s;
+            z-index: 10;
+            position: relative;
+        }
+
+        #resizeHandle:hover,
+        #resizeHandle.dragging {
+            background: #a230a4;
+        }
+
+        #resizeHandle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 1px;
+            height: 40px;
+            background: #4a4a58;
+            border-radius: 1px;
+            transition: background 0.2s;
+        }
+
+        #resizeHandle:hover::after,
+        #resizeHandle.dragging::after {
+            background: #a230a4;
+        }
+
+        @media (max-width: 900px) {
+            #resizeHandle {
+                width: 100%;
+                height: 5px;
+                cursor: row-resize;
+                flex-shrink: 0;
+            }
+
+            #resizeHandle::after {
+                width: 40px;
+                height: 1px;
+            }
+        }
+
         /* Modals */
         #quizModal,
         #remediationModal {
@@ -561,6 +611,7 @@
             <div class="overlay-label" style="bottom:16px; left:20px; font-size:9px; color:#4a4a58;">Logarithmic view
             </div>
         </div>
+        <div id="resizeHandle" title="Drag to resize"></div>
         <div id="panel">
             <div id="panelTitle">Command Panel</div>
 
@@ -644,6 +695,7 @@
                 </ul>
 
                 <button id="genBtn" class="cmd-btn">Remediate Plan</button>
+                <button id="deleteGalaxyBtn" class="sec-btn danger-btn" style="margin-top:8px; width:100%; display:none;">Delete Galaxy</button>
 
                 <div class="action-grid">
                     <button class="sec-btn" id="btnSync">Sync Changes</button>
@@ -656,6 +708,10 @@
                 <div class="eyebrow">Custom Gap Galaxy</div>
                 <input id="newClusterName" type="text" placeholder="New gap name...">
                 <div id="addClusterBtn">+Add Gap Galaxy</div>
+            </div>
+
+            <div class="panel-section" style="border-top: 1px solid #3c3c43; padding-top: 16px;">
+                <button id="resetDataBtn" class="sec-btn danger-btn" style="width:100%; border-color: #ff453a; color: #ff453a;">Reset All Data</button>
             </div>
         </div>
     </div>
@@ -684,25 +740,106 @@
             const ctx = canvas.getContext('2d');
             const wrap = document.getElementById('canvasWrap');
 
+            // CSS pixel dimensions of the canvas — the coordinate space used by ALL
+            // drawing calls and student/galaxy position math. canvas.width / canvas.height
+            // are the DPR-scaled *buffer* sizes; using those directly for coordinate math
+            // puts everything at 2× the intended position on Retina/HiDPI displays.
+            // All code that used to reference canvas.width/canvas.height for positioning
+            // (not buffer allocation) now uses cssW/cssH instead.
+            let cssW = 0, cssH = 0;
+
             function resize() {
+                // Manage resizable panel inline styles across breakpoints
+                const isMobile = window.innerWidth <= 900;
+                const panel = document.getElementById('panel');
+                if (isMobile) {
+                    panel.style.width = '';
+                    wrap.style.width = '';
+                    const savedMobileHeight = localStorage.getItem('kg_panel_height');
+                    if (savedMobileHeight) {
+                        wrap.style.height = `calc(100% - ${savedMobileHeight}px - 5px)`;
+                        panel.style.height = `${savedMobileHeight}px`;
+                    } else {
+                        wrap.style.height = '';
+                        panel.style.height = '';
+                    }
+                } else {
+                    panel.style.height = '';
+                    wrap.style.height = '';
+                    const savedDesktopWidth = localStorage.getItem('kg_panel_width');
+                    if (savedDesktopWidth) {
+                        wrap.style.width = `calc(100% - ${savedDesktopWidth}px - 5px)`;
+                        panel.style.width = `${savedDesktopWidth}px`;
+                    } else {
+                        wrap.style.width = '';
+                        panel.style.width = '';
+                    }
+                }
+
                 const r = wrap.getBoundingClientRect();
+                cssW = Math.round(r.width);
+                cssH = Math.round(r.height);
                 // Scale the internal pixel buffer by devicePixelRatio so the canvas
                 // rasterises at the screen's actual physical resolution on Retina/
                 // high-DPI devices (iPhone: 3×, iPad: 2×, standard desktop: 1×).
-                // The CSS size stays at r.width × r.height (controlled by the
+                // The CSS size stays at cssW × cssH (controlled by the
                 // width:100%/height:100% rule) so the layout is unchanged.
                 const dpr = window.devicePixelRatio || 1;
-                canvas.width  = Math.round(r.width  * dpr);
-                canvas.height = Math.round(r.height * dpr);
+                canvas.width  = cssW * dpr;
+                canvas.height = cssH * dpr;
                 // Re-apply the coordinate scale every time resize() runs (initial
                 // load, window resize, orientation change) — assigning to
                 // canvas.width/height resets the transform matrix, so ctx.scale
                 // must always follow the dimension assignment.
+                // After ctx.scale(dpr, dpr): 1 drawing unit = 1 CSS pixel. ✓
                 ctx.scale(dpr, dpr);
             }
             resize();
             window.addEventListener('resize', resize);
             window.addEventListener('orientationchange', () => setTimeout(resize, 100)); // iOS fires 'resize' late/inconsistently after rotation
+
+            // ===== RESIZABLE PANEL DRAG LOGIC =====
+            const resizeHandle = document.getElementById('resizeHandle');
+            let isResizingPanel = false;
+
+            resizeHandle.addEventListener('pointerdown', (e) => {
+                isResizingPanel = true;
+                resizeHandle.classList.add('dragging');
+                e.preventDefault();
+            });
+
+            document.addEventListener('pointermove', (e) => {
+                if (!isResizingPanel) return;
+                
+                const appRect = document.getElementById('app').getBoundingClientRect();
+                const panel = document.getElementById('panel');
+                
+                if (window.innerWidth > 900) {
+                    // Desktop: horizontal resizing (calculate width from right edge)
+                    let newWidth = appRect.right - e.clientX;
+                    newWidth = Math.max(240, Math.min(newWidth, appRect.width * 0.6));
+                    
+                    panel.style.width = `${newWidth}px`;
+                    wrap.style.width = `calc(100% - ${newWidth}px - 5px)`; // 5px for handle
+                    localStorage.setItem('kg_panel_width', newWidth);
+                } else {
+                    // Mobile: vertical resizing (calculate height from bottom edge)
+                    let newHeight = appRect.bottom - e.clientY;
+                    newHeight = Math.max(180, Math.min(newHeight, appRect.height * 0.7));
+                    
+                    panel.style.height = `${newHeight}px`;
+                    wrap.style.height = `calc(100% - ${newHeight}px - 5px)`;
+                    localStorage.setItem('kg_panel_height', newHeight);
+                }
+                resize();
+            });
+
+            document.addEventListener('pointerup', () => {
+                if (isResizingPanel) {
+                    isResizingPanel = false;
+                    resizeHandle.classList.remove('dragging');
+                }
+            });
 
             const MINT_GREEN = '#D9FCED';
             const LIGHT_YELLOW = '#FFF8C5';
@@ -721,7 +858,7 @@
 
             const NAMES = ['Ahmed', 'Sarah', 'Fatima', 'Omar', 'Layla', 'Khalid', 'Noor', 'Yousef', 'Reem', 'Faisal', 'Hessa', 'Turki', 'Maha', 'Nasser', 'Aisha', 'Bandar', 'Dana', 'Salman', 'Huda', 'Rashid', 'Mona', 'Talal', 'Sara', 'Zaid', 'Amal', 'Fahad', 'Lina', 'Yara', 'Abdullah', 'Rana'];
 
-            let SUBJECTS = {
+            const DEFAULT_SUBJECTS = {
                 mathematics: {
                     name: "Mathematics",
                     evaluated: true,
@@ -796,6 +933,46 @@
                 }
             };
 
+            let SUBJECTS = null;
+            try {
+                const saved = localStorage.getItem('knowledgeGalaxyState');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+                        // Re-link cluster references for each student
+                        for (const subjKey of Object.keys(parsed)) {
+                            const subj = parsed[subjKey];
+                            if (subj && subj.students && subj.clusters) {
+                                for (const student of subj.students) {
+                                    if (student.cluster && student.cluster.id) {
+                                        const matchingCluster = subj.clusters.find(c => c.id === student.cluster.id);
+                                        student.cluster = matchingCluster || null;
+                                    }
+                                }
+                            }
+                        }
+                        SUBJECTS = parsed;
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load knowledgeGalaxyState from localStorage:", e);
+            }
+
+            if (!SUBJECTS) {
+                SUBJECTS = DEFAULT_SUBJECTS;
+                populatePreassignedStudents('mathematics');
+                populatePreassignedStudents('science');
+                populatePreassignedStudents('programming');
+            }
+
+            function saveState() {
+                try {
+                    localStorage.setItem('knowledgeGalaxyState', JSON.stringify(SUBJECTS));
+                } catch (e) {
+                    console.error("Failed to save knowledgeGalaxyState:", e);
+                }
+            }
+
             function populatePreassignedStudents(subjKey) {
                 const subj = SUBJECTS[subjKey];
                 subj.students = [];
@@ -831,8 +1008,8 @@
                         sid: 500 + i,
                         cluster: null,
                         isShooter: true,
-                        x: canvas.width * (0.15 + Math.random() * 0.7),
-                        y: canvas.height * (0.15 + Math.random() * 0.7),
+                        x: cssW * (0.15 + Math.random() * 0.7),
+                        y: cssH * (0.15 + Math.random() * 0.7),
                         vx: Math.cos(angle) * 0.095,
                         vy: Math.sin(angle) * 0.095,
                         orbitR: 45, phase: 0, speed: 0.003, confidence: 1.0,
@@ -840,10 +1017,6 @@
                     });
                 }
             }
-
-            populatePreassignedStudents('mathematics');
-            populatePreassignedStudents('science');
-            populatePreassignedStudents('programming');
 
             let activeSubjectKey = 'mathematics';
             let CLUSTERS = SUBJECTS[activeSubjectKey].clusters;
@@ -999,6 +1172,13 @@
             function resolveClusterOverlaps(list, w, h) {
                 const PAD = 46;       // extra breathing room beyond the two glow radii
                 const DAMPING = 0.12; // fraction of overlap corrected per frame (smooth, not snappy)
+                // P0-2 fix: safe margins derived from actual canvas size so galaxy glows
+                // and label text can never clip off the canvas edges on short mobile viewports.
+                const MAX_RAD = 100; // 42 + 1.0 * 58 (worst-case glow radius)
+                const LABEL_ABOVE = 28; // label is drawn at cy - rad - 14; add safety margin
+                const safeX  = Math.max(0.06, (MAX_RAD + 12) / (w || 600));
+                const safeYT = Math.max(0.06, (MAX_RAD + LABEL_ABOVE) / (h || 400));
+                const safeYB = Math.max(0.06, (MAX_RAD + 12) / (h || 400));
 
                 for (let i = 0; i < list.length; i++) {
                     for (let j = i + 1; j < list.length; j++) {
@@ -1027,10 +1207,10 @@
                                 b.rel[0] += (nx * push * 2) / w; b.rel[1] += (ny * push * 2) / h;
                             }
 
-                            a.rel[0] = Math.min(0.94, Math.max(0.06, a.rel[0]));
-                            a.rel[1] = Math.min(0.94, Math.max(0.06, a.rel[1]));
-                            b.rel[0] = Math.min(0.94, Math.max(0.06, b.rel[0]));
-                            b.rel[1] = Math.min(0.94, Math.max(0.06, b.rel[1]));
+                            a.rel[0] = Math.min(1 - safeX,  Math.max(safeX,  a.rel[0]));
+                            a.rel[1] = Math.min(1 - safeYB, Math.max(safeYT, a.rel[1]));
+                            b.rel[0] = Math.min(1 - safeX,  Math.max(safeX,  b.rel[0]));
+                            b.rel[1] = Math.min(1 - safeYB, Math.max(safeYT, b.rel[1]));
                         }
                     }
                 }
@@ -1038,14 +1218,23 @@
 
             function pickNonOverlappingPosition(existingClusters) {
                 const list = existingClusters || CLUSTERS;
-                const MARGIN_X = 0.14, MARGIN_TOP = 0.16, MARGIN_BOTTOM = 0.10;
+                // P0-2 fix: compute safe margins dynamically from live canvas CSS dimensions
+                // so the galaxy glow (max 100px) and label text (drawn rad+14px above center)
+                // can never be clipped off the canvas edge on short mobile canvases.
+                const MAX_RAD = 100;    // worst-case glow radius (42 + 1.0*58)
+                const LABEL_ABOVE = 28; // label at cy - rad - 14, plus extra clearance
+                const w = cssW || 600, h = cssH || 400;
+                const marginX  = Math.max(0.14, (MAX_RAD + 12) / w);
+                const marginTop = Math.max(0.16, (MAX_RAD + LABEL_ABOVE) / h);
+                const marginBot = Math.max(0.10, (MAX_RAD + 12) / h);
+
                 const TARGET_SEP = 0.24; // stop early once a spot is at least this far from every galaxy
                 const CANDIDATES = 80;
 
                 let best = null, bestScore = -1;
                 for (let i = 0; i < CANDIDATES; i++) {
-                    const rx = MARGIN_X + Math.random() * (1 - 2 * MARGIN_X);
-                    const ry = MARGIN_TOP + Math.random() * (1 - MARGIN_TOP - MARGIN_BOTTOM);
+                    const rx = marginX + Math.random() * (1 - 2 * marginX);
+                    const ry = marginTop + Math.random() * (1 - marginTop - marginBot);
 
                     let minDist = list.length ? Infinity : 1;
                     for (const c of list) {
@@ -1066,25 +1255,60 @@
             // at a non-overlapping position. This is how "dynamically generated concept
             // clusters" (spec §3.2) get materialized on screen — whether the label came
             // from the teacher typing it in, or a grading pipeline guessing it.
-            function createOrFindCluster(label, opts) {
+            //
+            // P0-1 DEDUP (layer 2): after exact match fails, a Jaccard token-overlap score
+            // is computed against every existing cluster. If any cluster scores ≥0.50 the
+            // incoming label is treated as a near-duplicate of that cluster and it is
+            // returned instead of creating a new galaxy. This is the safety net for cases
+            // where Gemini returned a slightly different wording despite being instructed
+            // to reuse the exact label (e.g. "Fraction Addition Error" vs "Fraction
+            // Addition Misconception"). A console.warn is logged so deduplication is
+            // auditable during testing.
+            //
+            // Optional `targetClusters` param lets the gradeBtn handler pass in the
+            // cluster array it captured at click time (P2-C race fix) rather than the
+            // live global CLUSTERS reference, which may belong to a different subject by
+            // the time the async Gemini call returns.
+            function createOrFindCluster(label, opts, targetClusters) {
                 if (!label || !label.trim()) return null;
                 const cleanLabel = label.trim();
-                const existing = CLUSTERS.find(c => c.label.toLowerCase() === cleanLabel.toLowerCase());
-                if (existing) return existing;
+                const clusterList = targetClusters || CLUSTERS;
 
+                // Layer 1: exact case-insensitive match
+                const exact = clusterList.find(c => c.label.toLowerCase() === cleanLabel.toLowerCase());
+                if (exact) return exact;
+
+                // Layer 2: fuzzy Jaccard similarity on normalised word tokens
+                const normalize = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+                const tokenSet  = s => new Set(normalize(s).split(' ').filter(w => w.length > 2));
+                const incoming  = tokenSet(cleanLabel);
+                let bestMatch = null, bestScore = 0;
+                for (const c of clusterList) {
+                    const existing = tokenSet(c.label);
+                    const union = new Set([...incoming, ...existing]);
+                    const intersect = [...incoming].filter(t => existing.has(t));
+                    const jaccard = union.size > 0 ? intersect.length / union.size : 0;
+                    if (jaccard > bestScore) { bestScore = jaccard; bestMatch = c; }
+                }
+                if (bestScore >= 0.50) {
+                    console.warn('[createOrFindCluster] Fuzzy-matched "' + cleanLabel + '" → "' + bestMatch.label + '" (Jaccard=' + bestScore.toFixed(2) + '). Reusing existing galaxy.');
+                    return bestMatch;
+                }
+
+                // Layer 3: create a new cluster
                 opts = opts || {};
-                const rel = pickNonOverlappingPosition();
+                const rel = pickNonOverlappingPosition(clusterList);
                 const newCluster = {
                     id: slugify(cleanLabel) + '_' + Math.random().toString(36).slice(2, 7),
                     label: cleanLabel,
-                    color: PALETTE[CLUSTERS.length % PALETTE.length],
+                    color: PALETTE[clusterList.length % PALETTE.length],
                     rel: rel,
                     severity: (typeof opts.severity === 'number') ? opts.severity : (0.6 + Math.random() * 0.3),
                     keywords: cleanLabel.toLowerCase().split(/\s+/),
                     tips: (opts.tips && opts.tips.length) ? opts.tips : ['Interactive gap exercises', 'Peer learning group sessions', 'Targeted remediation worksheets'],
                     autoDiscovered: !!opts.autoDiscovered
                 };
-                CLUSTERS.push(newCluster);
+                clusterList.push(newCluster);
                 return newCluster;
             }
 
@@ -1115,12 +1339,15 @@
                 return ranked.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' & ');
             }
 
-            function geminiPipelineGrade(student, text, imageName) {
+            // capturedClusters is the subject's cluster array captured at click time
+            // (P2-C race fix). If omitted, falls back to the global CLUSTERS reference.
+            function geminiPipelineGrade(student, text, imageName, capturedClusters) {
+                const clusterList = capturedClusters || CLUSTERS;
                 const combined = ((text || '') + ' ' + (imageName || '') + ' ' + (student ? student.name : '')).toLowerCase();
                 let matchedCluster = null;
                 let maxHits = 0;
 
-                for (const cluster of CLUSTERS) {
+                for (const cluster of clusterList) {
                     let hits = 0;
                     if (cluster.keywords) {
                         for (const kw of cluster.keywords) {
@@ -1141,8 +1368,8 @@
                     // submission itself instead of dumping the student into a random one.
                     const guessedLabel = guessConceptFromText(text);
                     matchedCluster = guessedLabel
-                        ? createOrFindCluster(guessedLabel, { autoDiscovered: true })
-                        : (CLUSTERS[Math.floor(Math.random() * CLUSTERS.length)] || createOrFindCluster('Unclassified Gap', { autoDiscovered: true }));
+                        ? createOrFindCluster(guessedLabel, { autoDiscovered: true }, clusterList)
+                        : (clusterList[Math.floor(Math.random() * clusterList.length)] || createOrFindCluster('Unclassified Gap', { autoDiscovered: true }, clusterList));
                 }
 
                 const grade = isTopScore ? 100 : Math.floor(45 + Math.random() * 48);
@@ -1197,6 +1424,13 @@
             }
 
             function renderPanel() {
+                window.__APP_STATE = { 
+                    get SUBJECTS() { return SUBJECTS; },
+                    get CLUSTERS() { return CLUSTERS; },
+                    get activeSubjectKey() { return activeSubjectKey; },
+                    get canvas() { return canvas; },
+                    get hovered() { return hovered; }
+                };
                 populateSubjectDropdown();
                 const currentSubj = SUBJECTS[activeSubjectKey];
                 const isEval = currentSubj.evaluated;
@@ -1228,6 +1462,7 @@
                     const tips = selected.tips ? selected.tips : ['Target misconceptions with visual examples', 'Schedule one-on-one review session'];
                     document.getElementById('tipsList').innerHTML = tips.map(t => '<li>' + t + '</li>').join('');
                     document.getElementById('genBtn').style.background = selected.color;
+                    document.getElementById('deleteGalaxyBtn').style.display = 'block';
                 } else {
                     document.getElementById('selName').textContent = 'Unclustered Stars';
                     document.getElementById('selName').style.color = LIGHT_YELLOW;
@@ -1241,10 +1476,51 @@
                     ).join('');
                     document.getElementById('tipsList').innerHTML = '<li>Awaiting evaluation to reveal clusters...</li>';
                     document.getElementById('genBtn').style.background = LIGHT_YELLOW;
+                    document.getElementById('deleteGalaxyBtn').style.display = 'none';
                 }
-
                 populateStudentSelect();
+                saveState();
             }
+
+            document.getElementById('deleteGalaxyBtn').addEventListener('click', () => {
+                if (!selected) return;
+                const currentSubj = SUBJECTS[activeSubjectKey];
+                const currentStudents = currentSubj.students;
+                const members = currentStudents.filter(p => p.cluster === selected && !p.isShooter);
+                
+                if (confirm(`Are you sure you want to delete the "${selected.label}" galaxy?\n\nThis will unassign ${members.length} enrolled student(s), returning them to the unclustered stars. They will NOT be deleted.`)) {
+                    // Unassign all students in this galaxy
+                    for (const p of currentStudents) {
+                        if (p.cluster === selected) {
+                            p.cluster = null;
+                            p.confidence = 1.0;
+                            p.x = cssW * (0.15 + Math.random() * 0.7);
+                            p.y = cssH * (0.15 + Math.random() * 0.7);
+                            const angle = Math.random() * Math.PI * 2;
+                            p.vx = Math.cos(angle) * 0.095;
+                            p.vy = Math.sin(angle) * 0.095;
+                            p.trail = [];
+                        }
+                    }
+                    
+                    // Remove the galaxy from CLUSTERS
+                    const idx = CLUSTERS.indexOf(selected);
+                    if (idx !== -1) {
+                        CLUSTERS.splice(idx, 1);
+                    }
+                    
+                    // Update selection
+                    selected = CLUSTERS.length > 0 ? CLUSTERS[0] : null;
+                    renderPanel();
+                }
+            });
+
+            document.getElementById('resetDataBtn').addEventListener('click', () => {
+                if (confirm('Are you sure you want to reset all data? This will erase all enrolled students, galaxies, and evaluation states.')) {
+                    localStorage.removeItem('knowledgeGalaxyState');
+                    location.reload();
+                }
+            });
 
             document.getElementById('topStudentCheck').addEventListener('change', (e) => {
                 const clusterGroup = document.getElementById('clusterOverrideGroup');
@@ -1290,8 +1566,8 @@
                     p.isShooter = true;
                     p.cluster = null;
                     p.confidence = 1.0;
-                    p.x = canvas.width * (0.15 + Math.random() * 0.7);
-                    p.y = canvas.height * (0.15 + Math.random() * 0.7);
+                    p.x = cssW * (0.15 + Math.random() * 0.7);
+                    p.y = cssH * (0.15 + Math.random() * 0.7);
                     const angle = Math.random() * Math.PI * 2;
                     p.vx = Math.cos(angle) * 0.095;
                     p.vy = Math.sin(angle) * 0.095;
@@ -1362,8 +1638,8 @@
             // No other frontend changes are needed once those exist — every feature
             // below already knows how to consume them and only falls back to the local
             // simulation if the real thing isn't there.
-            const BACKEND_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-                ? 'http://localhost:8001'
+            const BACKEND_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:')
+                ? 'http://localhost:8000'  // backend runs on port 8000
                 : 'https://the-knowledge-galaxy.onrender.com';
 
             const GEMINI_BRIDGE_ENABLED = true;
@@ -1481,7 +1757,11 @@
             // real implementation of spec §3.2's "dynamically generated concept clusters."
             // Returns a normalized grade result matching geminiPipelineGrade()'s local
             // fallback shape, or null if the endpoint isn't configured / unreachable.
-            async function fetchGeminiGrade(student, text, imageName, imageDataUrl) {
+            // Optional subjectName, capturedClusters, and existingGapLabels parameters
+            // allow the caller to pass frozen state captured at the moment of the click,
+            // rather than reading from global state after the async network call returns
+            // (which may be for a different subject if the user switched tabs).
+            async function fetchGeminiGrade(student, text, imageName, imageDataUrl, subjectName, capturedClusters, existingGapLabels) {
                 if (!GEMINI_GRADE_ENDPOINT) return null;
                 try {
                     // image_base64/image_mime_type carry the actual scanned assignment so
@@ -1498,15 +1778,14 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            subject: SUBJECTS[activeSubjectKey].name,
+                            subject: subjectName || SUBJECTS[activeSubjectKey].name,
                             student_id: student ? student.sid : null,
                             student_name: student ? student.name : null,
                             notes: text || '',
                             image_name: imageName || null,
                             image_base64: imageBase64,
-                            image_mime_type: imageMimeType
-                            // Deliberately NOT sending a predefined cluster/concept list —
-                            // Gemini determines the concept purely from the assignment content.
+                            image_mime_type: imageMimeType,
+                            existing_gaps: existingGapLabels || null
                         })
                     });
                     if (!res.ok) return null;
@@ -1516,15 +1795,17 @@
                     const isTopScore = data.grade_percent === 100;
                     const firstError = Array.isArray(data.errors) && data.errors.length > 0 ? data.errors[0] : null;
                     let matchedCluster = null;
+                    const clusterList = capturedClusters || CLUSTERS;
+
                     if (!isTopScore && data.assigned_cluster) {
                         matchedCluster = createOrFindCluster(data.assigned_cluster, {
                             severity: firstError ? firstError.severity / 100 : undefined,
                             tips: data.recommended_interventions,
                             autoDiscovered: true
-                        });
+                        }, clusterList);
                     }
                     if (!isTopScore && !matchedCluster) {
-                        matchedCluster = CLUSTERS[0] || createOrFindCluster('Unclassified Gap', { autoDiscovered: true });
+                        matchedCluster = clusterList[0] || createOrFindCluster('Unclassified Gap', { autoDiscovered: true }, clusterList);
                     }
 
                     return {
@@ -2089,8 +2370,8 @@
 
                             if (gradeVal === 100 || (topicText && topicText.toLowerCase().includes('top'))) {
                                 student.isShooter = true;
-                                student.x = canvas.width * (0.15 + Math.random() * 0.7);
-                                student.y = canvas.height * (0.15 + Math.random() * 0.7);
+                                student.x = cssW * (0.15 + Math.random() * 0.7);
+                                student.y = cssH * (0.15 + Math.random() * 0.7);
                                 const angle = Math.random() * Math.PI * 2;
                                 student.vx = Math.cos(angle) * 0.095;
                                 student.vy = Math.sin(angle) * 0.095;
@@ -2164,6 +2445,18 @@
 
                 const text = document.getElementById('gradeText').value;
 
+                // P2-C RACE FIX: Capture state at click time before async grading starts.
+                // If the teacher switches subjects while grading is in flight, the global
+                // activeSubjectKey and CLUSTERS variables will change. By capturing these
+                // references here and passing them down, we ensure the graded student
+                // is assigned a galaxy in the CORRECT subject's cluster array, and
+                // existing_gaps duplicate prevention is evaluated against the correct
+                // subject's state.
+                const capturedSubjectKey = activeSubjectKey;
+                const capturedSubjectName = SUBJECTS[capturedSubjectKey].name;
+                const capturedClusters = SUBJECTS[capturedSubjectKey].clusters;
+                const existingGapLabels = capturedClusters.map(c => c.label);
+
                 // TIER 1: Live Gemini 3.6 grading endpoint (backend, once wired up)
                 // TIER 2: Local simulated grading pipeline — always available offline
                 const gradeBtnEl = document.getElementById('gradeBtn');
@@ -2172,14 +2465,14 @@
                 gradeBtnEl.style.pointerEvents = 'none';
                 let result;
                 try {
-                    result = await fetchGeminiGrade(p, text, attachedImageName, attachedImageDataUrl);
-                    if (!result) result = geminiPipelineGrade(p, text, attachedImageName);
+                    result = await fetchGeminiGrade(p, text, attachedImageName, attachedImageDataUrl, capturedSubjectName, capturedClusters, existingGapLabels);
+                    if (!result) result = geminiPipelineGrade(p, text, attachedImageName, capturedClusters);
                 } finally {
                     gradeBtnEl.textContent = originalBtnText;
                     gradeBtnEl.style.pointerEvents = 'auto';
                 }
 
-                SUBJECTS[activeSubjectKey].evaluated = true;
+                SUBJECTS[capturedSubjectKey].evaluated = true;
 
                 p.confidence = result.confidence;
                 p.justGraded = performance.now();
@@ -2206,6 +2499,11 @@
                     (p.isShooter ? '<span style="color:' + LIGHT_YELLOW + '">Status: Top Performer (100%)</span>' : 'Assigned Galaxy: <span style="color:' + result.cluster.color + '">' + result.cluster.label + '</span>') + '<br>' +
                     'Confidence: ' + Math.round(result.confidence * 100) + '%<br>' +
                     '<span style="font-size:8px;color:#8a8a98;">Feedback: "' + result.evidence + '"</span>';
+
+                // If the user hasn't switched subjects while we were waiting, update selection
+                if (activeSubjectKey === capturedSubjectKey) {
+                    if (!p.isShooter && result.cluster) selected = result.cluster;
+                }
 
                 // Reset the submission form so this student's notes/photo can't be
                 // silently re-used when grading the next student (previously the text,
@@ -2405,8 +2703,8 @@
 
                 let clickedStudent = null, bestStudentD = 22;
                 for (const p of currentStudents) {
-                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
-                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
+                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * cssW);
+                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * cssH);
                     const d = Math.hypot(sx - mx, sy - my);
                     if (d < bestStudentD) { bestStudentD = d; clickedStudent = p; }
                 }
@@ -2424,7 +2722,7 @@
                 if (SUBJECTS[activeSubjectKey].evaluated) {
                     let bestCluster = null, bestClusterD = 75;
                     for (const c of CLUSTERS) {
-                        const cx = c.rel[0] * canvas.width, cy = c.rel[1] * canvas.height;
+                        const cx = c.rel[0] * cssW, cy = c.rel[1] * cssH;
                         const d = Math.hypot(mx - cx, my - cy);
                         if (d < bestClusterD) { bestClusterD = d; bestCluster = c; }
                     }
@@ -2444,8 +2742,8 @@
                     const currentStudents = SUBJECTS[activeSubjectKey].students;
                     let clickedStudent = null, bestStudentD = 22;
                     for (const p of currentStudents) {
-                        const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
-                        const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
+                        const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * cssW);
+                        const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * cssH);
                         const d = Math.hypot(sx - mx, sy - my);
                         if (d < bestStudentD) { bestStudentD = d; clickedStudent = p; }
                     }
@@ -2458,7 +2756,7 @@
 
                 let bestCluster = null, bestD = Infinity;
                 for (const c of CLUSTERS) {
-                    const cx = c.rel[0] * canvas.width, cy = c.rel[1] * canvas.height;
+                    const cx = c.rel[0] * cssW, cy = c.rel[1] * cssH;
                     const rad = 42 + c.severity * 58;
                     const hitRadius = rad + 20;
                     const d = Math.hypot(mx - cx, my - cy);
@@ -2480,8 +2778,8 @@
                 if (draggingCluster) {
                     dragMoved = true;
                     draggingCluster.rel = [
-                        Math.min(0.94, Math.max(0.06, mx / canvas.width)),
-                        Math.min(0.94, Math.max(0.06, my / canvas.height))
+                        Math.min(0.94, Math.max(0.06, mx / cssW)),
+                        Math.min(0.94, Math.max(0.06, my / cssH))
                     ];
                     draggingCluster.manuallyPositioned = true;
                     canvas.style.cursor = 'grabbing';
@@ -2496,8 +2794,8 @@
                 const currentStudents = SUBJECTS[activeSubjectKey].students;
                 let best = null, bestD = 20;
                 for (const p of currentStudents) {
-                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
-                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
+                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * cssW);
+                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * cssH);
                     const d = Math.hypot(sx - mx, sy - my);
                     if (d < bestD) { bestD = d; best = p; }
                 }
