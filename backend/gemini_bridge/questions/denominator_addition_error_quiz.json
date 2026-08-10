@@ -1,0 +1,62 @@
+{
+  "cluster": "Denominator Addition Error",
+  "type": "quiz",
+  "questions": [
+    {
+      "question": "Solve the linear equation by first combining the variable terms: (1/4)x + (1/4)x = 3. What is the correct solution, and what incorrect solution might a student get if they commit the Denominator Addition Error?",
+      "options": [
+        "Correct: x = 6; Incorrect: x = 12",
+        "Correct: x = 12; Incorrect: x = 6",
+        "Correct: x = 3; Incorrect: x = 1.5",
+        "Correct: x = 6; Incorrect: x = 3"
+      ],
+      "correct_index": 0,
+      "explanation": "When combining (1/4)x + (1/4)x, we add the numerators while keeping the common denominator the same, giving (2/4)x = (1/2)x. Solving (1/2)x = 3 yields x = 6. A student making the Denominator Addition Error would add both numerators and denominators to get (2/8)x = (1/4)x, which leads to the incorrect solution x = 12."
+    },
+    {
+      "question": "When solving the linear equation (1/3)x + (1/3)x = 10, a student incorrectly combines the coefficients to get (2/6)x = 10. What is this error called, and what is the correct value of x?",
+      "options": [
+        "Denominator Addition Error; the correct value is x = 15.",
+        "Denominator Addition Error; the correct value is x = 30.",
+        "Numerator Multiplication Error; the correct value is x = 10.",
+        "Distribution Error; the correct value is x = 5."
+      ],
+      "correct_index": 0,
+      "explanation": "The error of adding both the numerators and the denominators when combining fractions (1/3 + 1/3 = 2/6) is known as the Denominator Addition Error. The correct coefficient is 2/3, making the equation (2/3)x = 10. To isolate x, multiply both sides by 3/2, which gives x = 15."
+    },
+    {
+      "question": "Consider the equation (2/5)x - 1 = (1/5)x + 2. To isolate the variable terms on one side, we subtract (1/5)x from both sides. If a student commits a denominator subtraction error, they might incorrectly simplify (2/5)x - (1/5)x to (1/10)x. What is the correct simplified equation after properly combining the x terms and isolating them by adding 1 to both sides?",
+      "options": [
+        "(1/5)x = 3",
+        "(1/10)x = 3",
+        "(1/5)x = 1",
+        "(3/5)x = 3"
+      ],
+      "correct_index": 0,
+      "explanation": "When subtracting fractions with like denominators, we subtract the numerators and keep the denominator the same: 2/5 - 1/5 = 1/5. Thus, (2/5)x - (1/5)x = (1/5)x. Adding 1 to both sides of the equation gives the isolated form (1/5)x = 3. Subtracting the denominators (5 - 5 = 0 or incorrectly doubling to 10) is a common denominator error."
+    },
+    {
+      "question": "To solve the linear equation (3/8)x + (1/8)x - 5 = 7, we first combine like terms and isolate the variable term by adding 5 to both sides. What is the correct simplified equation before solving for x, and what incorrect equation is produced by the Denominator Addition Error?",
+      "options": [
+        "Correct: (1/2)x = 12; Incorrect: (1/4)x = 12",
+        "Correct: (1/2)x = 12; Incorrect: (4/8)x = 2",
+        "Correct: (4/16)x = 12; Incorrect: (1/2)x = 12",
+        "Correct: (1/2)x = 2; Incorrect: (1/4)x = 2"
+      ],
+      "correct_index": 0,
+      "explanation": "To combine the coefficients, we calculate 3/8 + 1/8 = 4/8 = 1/2, giving (1/2)x. Adding 5 to both sides gives (1/2)x = 12. If a student makes the Denominator Addition Error, they would add both numerators and denominators to get 3/8 + 1/8 = 4/16 = 1/4, resulting in the incorrect simplified equation (1/4)x = 12."
+    },
+    {
+      "question": "A student attempts to solve (1/2)x + (1/3)x = 5. By committing the Denominator Addition Error, they add the fractions to get (2/5)x = 5, which solves to x = 12.5. Following the textbook's instruction to 'Always verify your solution', what happens when they substitute x = 12.5 back into the original equation?",
+      "options": [
+        "The left side evaluates to approximately 10.42, which does not equal 5, showing their solution is incorrect.",
+        "The left side evaluates to 5, which equals 5, showing that the Denominator Addition Error surprisingly worked.",
+        "The left side evaluates to 2.5, which does not equal 5, showing their solution is incorrect.",
+        "The left side evaluates to 12.5, which does not equal 5, showing their solution is incorrect."
+      ],
+      "correct_index": 0,
+      "explanation": "Substituting x = 12.5 into the original equation yields (1/2)(12.5) + (1/3)(12.5) = 6.25 + 4.167 = 10.42. Since 10.42 does not equal 5, verification successfully reveals that the solution obtained via the Denominator Addition Error is incorrect. (The correct solution is x = 6, which yields 3 + 2 = 5)."
+    }
+  ],
+  "generated_by": "gemini-3.5-flash"
+}

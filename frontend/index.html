@@ -50,7 +50,10 @@
             display: block;
             width: 100%;
             height: 100%;
-            image-rendering: pixelated;
+            /* image-rendering: pixelated removed — now that the internal buffer
+               is scaled by devicePixelRatio it matches the physical pixel grid,
+               so nearest-neighbour upscaling is no longer needed and would
+               actively hurt sharpness on Retina/high-DPI screens. */
             touch-action: none;
         }
 
@@ -106,8 +109,8 @@
             }
 
             .cmd-btn {
-                padding: 14px 0;
-                font-size: 13px;
+                padding: 18px 0;
+                font-size: 16px;
             }
 
             .sec-btn,
@@ -119,8 +122,8 @@
             #applyOverrideBtn,
             #genQuizBtn,
             #genWorksheetBtn {
-                padding: 12px 0;
-                font-size: 12px;
+                padding: 16px 0;
+                font-size: 15px;
             }
         }
 
@@ -138,8 +141,8 @@
             }
 
             .cmd-btn {
-                padding: 16px 0;
-                font-size: 15px;
+                padding: 20px 0;
+                font-size: 18px;
             }
 
             .sec-btn,
@@ -151,8 +154,8 @@
             #applyOverrideBtn,
             #genQuizBtn,
             #genWorksheetBtn {
-                padding: 14px 0;
-                font-size: 14px;
+                padding: 18px 0;
+                font-size: 17px;
             }
 
             input[type="text"],
@@ -211,10 +214,10 @@
 
         .cmd-btn {
             text-align: center;
-            font-size: 10px;
+            font-size: 14px;
             letter-spacing: 1.5px;
             text-transform: uppercase;
-            padding: 10px 0;
+            padding: 16px 0;
             border-radius: 4px;
             cursor: pointer;
             color: #0a0a0c;
@@ -242,10 +245,10 @@
             border: 1px solid #3a3a48;
             color: #b8b6c8;
             font-family: inherit;
-            font-size: 9px;
+            font-size: 13px;
             letter-spacing: 1px;
             text-transform: uppercase;
-            padding: 7px 0;
+            padding: 14px 0;
             text-align: center;
             border-radius: 3px;
             cursor: pointer;
@@ -331,10 +334,10 @@
         #genQuizBtn,
         #genWorksheetBtn {
             text-align: center;
-            font-size: 9px;
+            font-size: 13px;
             letter-spacing: 1.5px;
             text-transform: uppercase;
-            padding: 8px 0;
+            padding: 14px 0;
             border: 1px solid #CAC5E5;
             color: #CAC5E5;
             border-radius: 4px;
@@ -611,7 +614,7 @@
                     <input id="overrideConfusionInput" type="number" min="0" max="100" placeholder="e.g. 85">
                 </div>
 
-                <div id="applyOverrideBtn">Apply Override</div>
+                <div id="applyOverrideBtn">Apply</div>
             </div>
 
             <!-- Course Source Material & Generator -->
@@ -652,7 +655,7 @@
             <div class="panel-section">
                 <div class="eyebrow">Custom Gap Galaxy</div>
                 <input id="newClusterName" type="text" placeholder="New gap name...">
-                <div id="addClusterBtn">+ Add Gap Galaxy</div>
+                <div id="addClusterBtn">+Add Gap Galaxy</div>
             </div>
         </div>
     </div>
@@ -683,7 +686,19 @@
 
             function resize() {
                 const r = wrap.getBoundingClientRect();
-                canvas.width = r.width; canvas.height = r.height;
+                // Scale the internal pixel buffer by devicePixelRatio so the canvas
+                // rasterises at the screen's actual physical resolution on Retina/
+                // high-DPI devices (iPhone: 3×, iPad: 2×, standard desktop: 1×).
+                // The CSS size stays at r.width × r.height (controlled by the
+                // width:100%/height:100% rule) so the layout is unchanged.
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width  = Math.round(r.width  * dpr);
+                canvas.height = Math.round(r.height * dpr);
+                // Re-apply the coordinate scale every time resize() runs (initial
+                // load, window resize, orientation change) — assigning to
+                // canvas.width/height resets the transform matrix, so ctx.scale
+                // must always follow the dimension assignment.
+                ctx.scale(dpr, dpr);
             }
             resize();
             window.addEventListener('resize', resize);
@@ -871,6 +886,38 @@
 
             let attachedImageName = null;
             let attachedImageDataUrl = null;
+
+            // Wipes every piece of transient grading/override/gap-name form state so
+            // that switching subjects never carries over leftovers from another subject.
+            function resetGradingFormState() {
+                // Attached grading image
+                attachedImageName = null;
+                attachedImageDataUrl = null;
+                const gradeImageInput = document.getElementById('gradeImage');
+                gradeImageInput.value = '';
+                document.getElementById('gradeImgTag').src = '';
+                document.getElementById('gradeImagePreview').style.display = 'none';
+                document.getElementById('gradeImageLabel').textContent = '+ Attach Photo';
+
+                // Grading notes textarea & result box
+                document.getElementById('gradeText').value = '';
+                const gradeResult = document.getElementById('gradeResult');
+                gradeResult.style.display = 'none';
+                gradeResult.textContent = '';
+
+                // Manual override form: checkbox, cluster select, confusion input
+                const topCheck = document.getElementById('topStudentCheck');
+                topCheck.checked = false;
+                topCheck.dispatchEvent(new Event('change')); // restores cluster-group opacity/pointer-events
+                document.getElementById('overrideConfusionInput').value = '';
+                // overrideClusterSelect options are rebuilt by renderPanel() via
+                // populateStudentSelect() — just reset selectedIndex here.
+                document.getElementById('overrideClusterSelect').selectedIndex = 0;
+
+                // New-gap-name input
+                document.getElementById('newClusterName').value = '';
+            }
+
             document.getElementById('gradeImage').addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -1315,11 +1362,15 @@
             // No other frontend changes are needed once those exist — every feature
             // below already knows how to consume them and only falls back to the local
             // simulation if the real thing isn't there.
+            const BACKEND_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+                ? 'http://localhost:8001'
+                : 'https://the-knowledge-galaxy.onrender.com';
+
             const GEMINI_BRIDGE_ENABLED = true;
-            const GEMINI_BRIDGE_QUESTIONS_PATH = 'https://the-knowledge-galaxy.onrender.com/gemini_bridge/questions/';      // GET <slug>_<type>.json
-            const GEMINI_BRIDGE_REMEDIATION_PATH = 'https://the-knowledge-galaxy.onrender.com/gemini_bridge/remediation/';  // GET <slug>.json
-            const GEMINI_GRADE_ENDPOINT = 'https://the-knowledge-galaxy.onrender.com/grade';  // e.g. 'https://the-knowledge-galaxy.onrender.com/grade' — POST, empty = disabled
-            const GEMINI_TEXTBOOK_UPLOAD_ENDPOINT = 'https://the-knowledge-galaxy.onrender.com/upload_textbook';  // e.g. 'https://the-knowledge-galaxy.onrender.com/upload_textbook' — POST, empty = disabled
+            const GEMINI_BRIDGE_QUESTIONS_PATH = BACKEND_BASE + '/gemini_bridge/questions/';      // GET <slug>_<type>.json
+            const GEMINI_BRIDGE_REMEDIATION_PATH = BACKEND_BASE + '/gemini_bridge/remediation/';  // GET <slug>.json
+            const GEMINI_GRADE_ENDPOINT = BACKEND_BASE + '/grade';  // e.g. 'https://the-knowledge-galaxy.onrender.com/grade' — POST, empty = disabled
+            const GEMINI_TEXTBOOK_UPLOAD_ENDPOINT = BACKEND_BASE + '/upload_textbook';  // e.g. 'https://the-knowledge-galaxy.onrender.com/upload_textbook' — POST, empty = disabled
 
             function slugify(str) {
                 return (str || 'general').toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -1361,7 +1412,7 @@
                 if (!GEMINI_BRIDGE_ENABLED) return null;
                 try {
                     const currentSubj = SUBJECTS[activeSubjectKey];
-                    const res = await fetch('https://the-knowledge-galaxy.onrender.com/generate_questions', {
+                    const res = await fetch(BACKEND_BASE + '/generate_questions', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1399,7 +1450,7 @@
                 if (!GEMINI_BRIDGE_ENABLED) return null;
                 try {
                     const currentSubj = SUBJECTS[activeSubjectKey];
-                    const res = await fetch('https://the-knowledge-galaxy.onrender.com/generate_remediation', {
+                    const res = await fetch(BACKEND_BASE + '/generate_remediation', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1915,16 +1966,13 @@
                     evaluated: false,
                     bookName: null,
                     bookText: "",
-                    clusters: [
-                        { id: key + '_c1', label: name.trim() + ' Fundamentals', color: PALETTE[0], rel: [0.35, 0.48], severity: 0.8, tips: ['Review core gaps'], keywords: [name.trim().toLowerCase(), 'fundamentals', 'basics'] },
-                        { id: key + '_c2', label: name.trim() + ' Advanced Topics', color: PALETTE[1], rel: [0.65, 0.52], severity: 0.9, tips: ['Practice complex problems'], keywords: [name.trim().toLowerCase(), 'advanced'] }
-                    ],
+                    clusters: [],
                     students: [] // FULLY EMPTY ROSTER!
                 };
 
                 activeSubjectKey = key;
                 CLUSTERS = SUBJECTS[key].clusters;
-                selected = CLUSTERS[0];
+                selected = null;
                 renderPanel();
             });
 
@@ -1944,6 +1992,9 @@
             });
 
             document.getElementById('subjectSelect').addEventListener('change', (e) => {
+                // Reset ALL in-progress form state before switching subjects so nothing
+                // from the previous subject bleeds into the newly-selected one.
+                resetGradingFormState();
                 activeSubjectKey = e.target.value;
                 CLUSTERS = SUBJECTS[activeSubjectKey].clusters;
                 selected = CLUSTERS[0];

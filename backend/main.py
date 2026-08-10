@@ -137,25 +137,60 @@ class UploadTextbookRequest(BaseModel):
     text: str
 
 # --- structured output helper ---
-def clean_schema(d: Any) -> Any:
+def clean_schema(d: Any, defs: Optional[dict] = None) -> Any:
+    """Recursively clean a Pydantic-generated JSON schema for the Gemini SDK.
+
+    The Gemini SDK does NOT support several JSON-Schema keywords:
+      - 'default'  : remove
+      - '$defs'    : inline & remove
+      - 'title'    : remove
+      - 'anyOf'    : unwrap — Optional[X] becomes just the non-null type
+    """
+    if defs is None and isinstance(d, dict) and "$defs" in d:
+        defs = d["$defs"]
+
     if not isinstance(d, dict):
         return d
+
+    if "$ref" in d:
+        ref_path = d["$ref"]
+        def_name = ref_path.split("/")[-1]
+        if defs and def_name in defs:
+            return clean_schema(defs[def_name], defs)
+
+    # Unwrap Optional[X] → anyOf: [{type: X}, {type: null}]
+    if "anyOf" in d:
+        non_null = [s for s in d["anyOf"] if not (isinstance(s, dict) and s.get("type") == "null")]
+        if len(non_null) == 1:
+            # Merge any sibling keys (e.g. 'description') into the unwrapped schema
+            unwrapped = clean_schema(non_null[0], defs)
+            for k, v in d.items():
+                if k not in ("anyOf", "default", "title") and k not in unwrapped:
+                    unwrapped[k] = v
+            return unwrapped
+
     cleaned = {}
     for k, v in d.items():
-        if k == 'default':
+        if k in ('default', '$defs', 'title'):
             continue
         if isinstance(v, dict):
-            cleaned[k] = clean_schema(v)
+            cleaned[k] = clean_schema(v, defs)
         elif isinstance(v, list):
-            cleaned[k] = [clean_schema(item) if isinstance(item, dict) else item for item in v]
+            cleaned[k] = [clean_schema(item, defs) if isinstance(item, dict) else item for item in v]
         else:
             cleaned[k] = v
     return cleaned
 
-def generate_structured_json(contents: Any, response_schema: Any, model_name: str = "gemini-3.1-pro-preview") -> Any:
+def generate_structured_json(contents: Any, response_schema: Any, model_name: str = "gemini-3.1-pro-preview") -> tuple:
+    """Call Gemini with structured JSON output.
+
+    Returns:
+        A tuple of (parsed_json: dict, model_used: str) so callers can record
+        which model actually succeeded.
+    """
     if not os.getenv("GEMINI_API_KEY"):
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY environment variable is not configured.")
-    
+
     # Generate schema dictionary from Pydantic model
     schema_dict = None
     if hasattr(response_schema, "model_json_schema"):
@@ -167,14 +202,36 @@ def generate_structured_json(contents: Any, response_schema: Any, model_name: st
         # Strip all 'default' keys because google-generativeai SDK doesn't support them
         schema_dict = clean_schema(schema_dict)
 
-    fallback_models = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-2.5-pro"]
-    if model_name not in fallback_models:
-        fallback_models.insert(0, model_name)
+    # --- Confirmed, live model IDs (verified via models.list() on 2026-08-11) ---
+    # Pro models first — accuracy over speed for grading/classification.
+    # Flash models are only a last resort.
+    # NOTE: gemini-3-pro-preview does NOT exist in the API; it has been removed.
+    PRO_MODELS = [
+        "gemini-3.1-pro-preview",   # confirmed via models.list()
+        "gemini-2.5-pro",           # confirmed via models.list()
+    ]
+    FLASH_MODELS = [
+        "gemini-3.5-flash",         # confirmed via models.list()
+        "gemini-3.6-flash",         # confirmed via models.list()
+        "gemini-flash-latest",      # confirmed via models.list()
+    ]
+
+    # Build ordered list: requested model first (if not already present), then all Pro, then Flash
+    fallback_models: list = []
+    if model_name not in PRO_MODELS and model_name not in FLASH_MODELS:
+        fallback_models.append(model_name)
+    fallback_models.extend(PRO_MODELS)
+    fallback_models.extend(FLASH_MODELS)
+    # Deduplicate while preserving order
+    seen: set = set()
+    fallback_models = [m for m in fallback_models if not (m in seen or seen.add(m))]  # type: ignore[func-returns-value]
 
     last_error = None
+
+    # Pass 1: structured schema output
     for model_attempt in fallback_models:
         try:
-            print(f"Attempting to generate structured JSON using model: {model_attempt}")
+            print(f"[generate_structured_json] Attempting model: {model_attempt} (with schema)")
             model = genai.GenerativeModel(model_attempt)  # type: ignore
             response = model.generate_content(
                 contents,
@@ -183,15 +240,18 @@ def generate_structured_json(contents: Any, response_schema: Any, model_name: st
                     response_schema=schema_dict if schema_dict else response_schema
                 )
             )
-            return json.loads(response.text)
+            parsed = json.loads(response.text)
+            print(f"[generate_structured_json] SUCCESS with model: {model_attempt}")
+            return parsed, model_attempt
         except Exception as e:
-            print(f"Failed with model {model_attempt}: {e}")
+            print(f"[generate_structured_json] FAILED with model {model_attempt}: {e}")
             last_error = e
 
-    # If all structured schema attempts failed, attempt fallback without schema validation
-    print("Attempting fallback generation without schema validation...")
-    for model_attempt in ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-pro-preview", "gemini-3-pro-preview", "gemini-2.5-pro"]:
+    # Pass 2: fallback without schema validation (same Pro-first order)
+    print("[generate_structured_json] All schema attempts failed. Retrying without schema validation...")
+    for model_attempt in fallback_models:
         try:
+            print(f"[generate_structured_json] Attempting model: {model_attempt} (no schema)")
             model = genai.GenerativeModel(model_attempt)  # type: ignore
             response = model.generate_content(
                 contents,
@@ -199,8 +259,11 @@ def generate_structured_json(contents: Any, response_schema: Any, model_name: st
                     response_mime_type="application/json"
                 )
             )
-            return json.loads(response.text)
+            parsed = json.loads(response.text)
+            print(f"[generate_structured_json] SUCCESS (no schema) with model: {model_attempt}")
+            return parsed, model_attempt
         except Exception as e:
+            print(f"[generate_structured_json] FAILED (no schema) with model {model_attempt}: {e}")
             last_error = e
 
     raise HTTPException(status_code=500, detail=f"Failed to generate structured content from Gemini API: {str(last_error)}")
@@ -256,13 +319,22 @@ You must return a JSON object that strictly adheres to the requested schema.
 """
     contents.append(prompt)
 
-    # Call Gemini
-    result_data = generate_structured_json(contents, GradeResponse)
-    
+    # Call Gemini — returns (parsed_json, model_used)
+    result_data, model_used = generate_structured_json(contents, GradeResponse)
+    print(f"[/grade] Grading completed. Model used: {model_used}")
+
     # Standardize result name & subject
     result_data["subject"] = req.subject
     result_data["student_name"] = req.student_name or "Student"
-    
+
+    # Normalise grade field — Gemini sometimes returns 'grade' or 'grade_percentage'
+    # instead of the exact schema name 'grade_percent'. Remap any known aliases.
+    for alias in ("grade_percentage", "grade", "score", "grade_score"):
+        if alias in result_data and "grade_percent" not in result_data:
+            result_data["grade_percent"] = result_data.pop(alias)
+            print(f"[/grade] Remapped '{alias}' → 'grade_percent'")
+            break
+
     # Handle the null assigned_cluster for 100% grade
     if result_data.get("grade_percent") == 100:
         result_data["assigned_cluster"] = None
@@ -297,10 +369,11 @@ Requirements:
 3. If textbook grounding is provided, you MUST construct the questions using the terminology, definitions, and context from that textbook excerpt.
 4. Output must match the requested schema perfectly.
 """
-    result_data = generate_structured_json(prompt, QuestionsResponse)
+    result_data, model_used = generate_structured_json(prompt, QuestionsResponse)
+    print(f"[/generate_questions] Questions generated. Model used: {model_used}")
     result_data["cluster"] = req.cluster
     result_data["type"] = req.type
-    result_data["generated_by"] = "gemini-3.1-pro-preview"
+    result_data["generated_by"] = model_used
 
     # Write to gemini_bridge/questions/<cluster_slug>_<type>.json
     cluster_slug = slugify(req.cluster)
@@ -331,9 +404,10 @@ Requirements:
 """
     # Use aliases or dict for mapping to 'num' and 'desc'
     # Pydantic schema will handle parsing it.
-    result_data = generate_structured_json(prompt, RemediationResponse)
+    result_data, model_used = generate_structured_json(prompt, RemediationResponse)
+    print(f"[/generate_remediation] Remediation generated. Model used: {model_used}")
     result_data["cluster"] = req.cluster
-    result_data["generated_by"] = "gemini-3.1-pro-preview"
+    result_data["generated_by"] = model_used
 
     # Write to gemini_bridge/remediation/<cluster_slug>.json
     cluster_slug = slugify(req.cluster)
