@@ -1,6 +1,28 @@
+# Environment Variables
 .env
-venv/
+*.env
+
+# Python Caches
 __pycache__/
-.mypy_cache/
-.vscode/
+*.pyc
+*.pyo
+
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# Test Caches
+.pytest_cache/
+
+# Windows OS Files
+Thumbs.db
+
+# Local Testing & Config Files
+test_full_loop.py
+test_galaxy_drag.py
+test_shooter.py
+pyrightconfig.json
+
+
 .DS_Store
