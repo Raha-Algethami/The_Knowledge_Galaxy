@@ -58,10 +58,10 @@ def slugify(str_val: str) -> str:
     val = re.sub(r'^_+|_+$', '', val)
     return val if val else "general"
 
-def save_textbook(subject: str, file_name: str, text: str) -> None:
+def save_textbook(subject: str, file_name: str, text: str, file_uri: Optional[str] = None, gemini_file_id: Optional[str] = None, is_base64: bool = False) -> None:
     filename = f"{TEXTBOOK_DIR}/{slugify(subject)}.json"
     with open(filename, "w", encoding="utf-8") as f:
-        json.dump({"file_name": file_name, "text": text}, f, ensure_ascii=False, indent=2)
+        json.dump({"file_name": file_name, "text": text, "file_uri": file_uri, "gemini_file_id": gemini_file_id, "is_base64": is_base64}, f, ensure_ascii=False, indent=2)
 
 def load_textbook(subject: str) -> Optional[Dict[str, Any]]:
     filename = f"{TEXTBOOK_DIR}/{slugify(subject)}.json"
@@ -139,6 +139,7 @@ class UploadTextbookRequest(BaseModel):
     subject: str
     file_name: str
     text: str
+    is_base64: bool = False
 
 # --- structured output helper ---
 def clean_schema(d: Any, defs: Optional[dict] = None) -> Any:
@@ -293,8 +294,16 @@ async def grade_assignment(req: GradeRequest) -> Any:
     textbook_info = load_textbook(req.subject)
     textbook_grounding = ""
     if textbook_info:
-        # Excerpt from textbook to assist assessment
-        textbook_grounding = f"\nReferenced Textbook content:\n{textbook_info['text'][:12000]}\n"
+        if textbook_info.get("gemini_file_id"):
+            try:
+                gemini_file = genai.get_file(textbook_info["gemini_file_id"])
+                contents.append(gemini_file)
+                textbook_grounding = f"\nReferenced Textbook content is provided as an attached document ({textbook_info['file_name']}).\n"
+            except Exception as e:
+                print(f"Warning: Could not fetch gemini file {textbook_info['gemini_file_id']}: {e}")
+        else:
+            # Excerpt from textbook to assist assessment
+            textbook_grounding = f"\nReferenced Textbook content:\n{textbook_info['text'][:12000]}\n"
 
     # Construct the instruction prompt
     # Build existing-gaps guidance so Gemini reuses exact cluster names instead
@@ -364,10 +373,20 @@ You must return a JSON object that strictly adheres to the requested schema.
 
 @app.post("/generate_questions", response_model=QuestionsResponse)
 async def generate_questions(req: GenerateQuestionsRequest) -> Any:
+    contents_list: List[Any] = []
     textbook_info = load_textbook(req.subject)
     textbook_grounding = ""
     if textbook_info:
-        textbook_grounding = f"\nTextbook Grounding Context ({textbook_info['file_name']}):\n{textbook_info['text']}\n"
+        if textbook_info.get("gemini_file_id"):
+            try:
+                gemini_file = genai.get_file(textbook_info["gemini_file_id"])
+                contents_list.append(gemini_file)
+                textbook_grounding = f"\nTextbook Grounding Context is provided as an attached document ({textbook_info['file_name']}).\n"
+            except Exception as e:
+                print(f"Warning: Could not fetch gemini file {textbook_info['gemini_file_id']}: {e}")
+                textbook_grounding = "\nGenerate questions based on standard curriculum baselines since the attached textbook could not be loaded.\n"
+        else:
+            textbook_grounding = f"\nTextbook Grounding Context ({textbook_info['file_name']}):\n{textbook_info['text']}\n"
     else:
         textbook_grounding = "\nGenerate questions based on standard curriculum baselines since no textbook is uploaded.\n"
 
@@ -385,10 +404,15 @@ Requirements:
    - Provide exactly 4 options.
    - Provide the `correct_index` (0-3) of the correct option.
    - Provide a clear, educational `explanation` of why that answer is correct.
-3. If textbook grounding is provided, you MUST construct the questions using the terminology, definitions, and context from that textbook excerpt.
-4. Output must match the requested schema perfectly.
+3. Ensure high pedagogical rigor:
+   - Use plausible, non-obvious distractors (do NOT use silly or easy-to-eliminate wrong answers).
+   - Maintain grade-appropriate difficulty.
+   - Ensure high variety in question phrasing, context, and structure across the 5 questions (avoid similar-looking repeats).
+4. If textbook grounding is provided, you MUST construct the questions using the terminology, definitions, and context from that textbook excerpt.
+5. Output must match the requested schema perfectly.
 """
-    result_data, model_used = generate_structured_json(prompt, QuestionsResponse)
+    contents_list.append(prompt)
+    result_data, model_used = generate_structured_json(contents_list, QuestionsResponse)
     print(f"[/generate_questions] Questions generated. Model used: {model_used}")
     result_data["cluster"] = req.cluster
     result_data["type"] = req.type
@@ -405,11 +429,25 @@ Requirements:
 
 @app.post("/generate_remediation", response_model=RemediationResponse)
 async def generate_remediation(req: GenerateRemediationRequest) -> Any:
+    contents_list: List[Any] = []
+    textbook_info = load_textbook(req.subject)
+    textbook_grounding = ""
+    if textbook_info:
+        if textbook_info.get("gemini_file_id"):
+            try:
+                gemini_file = genai.get_file(textbook_info["gemini_file_id"])
+                contents_list.append(gemini_file)
+                textbook_grounding = f"\nTextbook Grounding Context is provided as an attached document ({textbook_info['file_name']}). Please use this textbook to align the remediation steps with the curriculum.\n"
+            except Exception as e:
+                print(f"Warning: Could not fetch gemini file {textbook_info['gemini_file_id']}: {e}")
+        else:
+            textbook_grounding = f"\nTextbook Grounding Context ({textbook_info['file_name']}):\n{textbook_info['text']}\n"
+
     prompt = f"""You are an expert educational psychologist and teacher. Your task is to design a step-by-step remediation guide for a student struggling with the following misconception.
 
 Subject: {req.subject}
 Concept/Misconception Cluster: {req.cluster}
-
+{textbook_grounding}
 Requirements:
 1. Generate between 4 and 6 sequential steps.
 2. The plan must include:
@@ -421,9 +459,10 @@ Requirements:
 3. Let the steps' titles and descriptions be specific to the subject and the misconception cluster, rather than generic templates.
 4. Output must match the requested schema perfectly.
 """
+    contents_list.append(prompt)
     # Use aliases or dict for mapping to 'num' and 'desc'
     # Pydantic schema will handle parsing it.
-    result_data, model_used = generate_structured_json(prompt, RemediationResponse)
+    result_data, model_used = generate_structured_json(contents_list, RemediationResponse)
     print(f"[/generate_remediation] Remediation generated. Model used: {model_used}")
     result_data["cluster"] = req.cluster
     result_data["generated_by"] = model_used
@@ -440,5 +479,27 @@ Requirements:
 
 @app.post("/upload_textbook")
 async def upload_textbook(req: UploadTextbookRequest) -> Dict[str, str]:
-    save_textbook(req.subject, req.file_name, req.text)
-    return {"status": "success", "file_name": req.file_name, "subject": req.subject}
+    if req.is_base64:
+        import uuid
+        data_parts = req.text.split(",")
+        b64_data = data_parts[1] if len(data_parts) > 1 else req.text
+        
+        ext = os.path.splitext(req.file_name)[1]
+        temp_path = f"temp_upload_{uuid.uuid4().hex}{ext}"
+        
+        try:
+            with open(temp_path, "wb") as f:
+                f.write(base64.b64decode(b64_data))
+            
+            # Decode the file locally to bypass the broken Gemini File API!
+            decoded_text = base64.b64decode(b64_data).decode('utf-8', errors='ignore')
+            save_textbook(req.subject, req.file_name, decoded_text, is_base64=False)
+            return {"status": "success", "file_name": req.file_name, "subject": req.subject}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Gemini upload failed: {str(e)}")
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+    else:
+        save_textbook(req.subject, req.file_name, req.text, is_base64=False)
+        return {"status": "success", "file_name": req.file_name, "subject": req.subject}

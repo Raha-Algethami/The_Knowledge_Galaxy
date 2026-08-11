@@ -435,6 +435,18 @@
             background: #a230a4;
         }
 
+        /* Invisible padded hit area to make dragging easier on touch devices */
+        #resizeHandle::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: -15px;
+            right: -15px;
+            cursor: col-resize;
+            z-index: -1;
+        }
+
         #resizeHandle::after {
             content: '';
             position: absolute;
@@ -459,6 +471,14 @@
                 height: 5px;
                 cursor: row-resize;
                 flex-shrink: 0;
+            }
+
+            #resizeHandle::before {
+                top: -15px;
+                bottom: -15px;
+                left: 0;
+                right: 0;
+                cursor: row-resize;
             }
 
             #resizeHandle::after {
@@ -606,6 +626,7 @@
     <div id="app">
         <div id="canvasWrap">
             <canvas id="c"></canvas>
+            <button id="resetViewBtn" class="sec-btn" style="position: absolute; top: 12px; right: 16px; z-index: 100; font-size: 11px; padding: 4px 8px; display: none;">RESET VIEW</button>
             <div class="overlay-label" style="top:18px; left:20px; font-size:14px; font-weight:700;">The Knowledge
                 Galaxy</div>
             <div class="overlay-label" style="bottom:16px; left:20px; font-size:9px; color:#4a4a58;">Logarithmic view
@@ -747,6 +768,27 @@
             // All code that used to reference canvas.width/canvas.height for positioning
             // (not buffer allocation) now uses cssW/cssH instead.
             let cssW = 0, cssH = 0;
+            let camera = { offsetX: 0, offsetY: 0, scale: 1 };
+            let activePointers = new Map();
+            let panStart = null;
+
+            function worldToScreen(worldX, worldY) {
+                const dpr = window.devicePixelRatio || 1;
+                return {
+                    x: (worldX * camera.scale + camera.offsetX) / dpr,
+                    y: (worldY * camera.scale + camera.offsetY) / dpr
+                };
+            }
+
+            function screenToWorld(cssX, cssY) {
+                const dpr = window.devicePixelRatio || 1;
+                const dprX = cssX * dpr;
+                const dprY = cssY * dpr;
+                return {
+                    x: (dprX - camera.offsetX) / camera.scale,
+                    y: (dprY - camera.offsetY) / camera.scale
+                };
+            }
 
             function resize() {
                 // Manage resizable panel inline styles across breakpoints
@@ -1122,16 +1164,26 @@
             // couldn't really happen). Fire-and-forget: if the endpoint isn't
             // configured yet or is unreachable, this silently no-ops and the app
             // keeps working entirely on local fallbacks, same as every other hook.
-            async function uploadTextbookToBackend(subjectName, fileName, fileText) {
+            async function uploadTextbookToBackend(subjectName, fileName, fileText, isBase64) {
                 if (!GEMINI_TEXTBOOK_UPLOAD_ENDPOINT) return;
                 try {
-                    await fetch(GEMINI_TEXTBOOK_UPLOAD_ENDPOINT, {
+                    const res = await fetch(GEMINI_TEXTBOOK_UPLOAD_ENDPOINT, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ subject: subjectName, file_name: fileName, text: fileText })
+                        body: JSON.stringify({ subject: subjectName, file_name: fileName, text: fileText, is_base64: isBase64 })
                     });
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.detail || "Server returned " + res.status);
+                    }
                 } catch (err) {
-                    // Backend not wired up yet or offline — nothing to do.
+                    alert("Textbook upload failed: " + err.message);
+                    const currentSubj = SUBJECTS[activeSubjectKey];
+                    if (currentSubj.bookName === fileName) {
+                        currentSubj.bookName = null;
+                        currentSubj.bookText = "";
+                        renderPanel();
+                    }
                 }
             }
 
@@ -1139,16 +1191,38 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
+                const name = file.name.toLowerCase();
+                const isText = ['.txt', '.csv', '.md', '.html'].some(ext => name.endsWith(ext));
+                const isSupportedBin = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif'].some(ext => name.endsWith(ext));
+
+                if (!isText && !isSupportedBin) {
+                    alert("File format not supported. Please upload a PDF, Image, or plain text file.");
+                    e.target.value = '';
+                    return;
+                }
+
                 const currentSubj = SUBJECTS[activeSubjectKey];
                 currentSubj.bookName = file.name;
+                renderPanel(); // Immediately show loading or attached state
 
                 const reader = new FileReader();
                 reader.onload = function (ev) {
-                    currentSubj.bookText = cleanSourceExcerpt(ev.target.result || "");
+                    let fileText = ev.target.result;
+                    if (isText) {
+                        fileText = cleanSourceExcerpt(fileText || "");
+                        currentSubj.bookText = fileText;
+                    } else {
+                        currentSubj.bookText = "[PDF/Image Attached. Backend processing required.]";
+                    }
                     renderPanel();
-                    uploadTextbookToBackend(currentSubj.name, file.name, currentSubj.bookText);
+                    uploadTextbookToBackend(currentSubj.name, file.name, fileText, !isText);
                 };
-                reader.readAsText(file);
+                
+                if (isText) {
+                    reader.readAsText(file);
+                } else {
+                    reader.readAsDataURL(file);
+                }
             });
 
             // ============================================================================
@@ -2698,13 +2772,14 @@
                 if (justDraggedCluster) { justDraggedCluster = false; return; }
 
                 const r = canvas.getBoundingClientRect();
-                const mx = e.clientX - r.left, my = e.clientY - r.top;
+                const rawMx = e.clientX - r.left, rawMy = e.clientY - r.top;
+                const { x: mx, y: my } = screenToWorld(rawMx, rawMy);
                 const currentStudents = SUBJECTS[activeSubjectKey].students;
 
                 let clickedStudent = null, bestStudentD = 22;
                 for (const p of currentStudents) {
-                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * cssW);
-                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * cssH);
+                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
+                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
                     const d = Math.hypot(sx - mx, sy - my);
                     if (d < bestStudentD) { bestStudentD = d; clickedStudent = p; }
                 }
@@ -2722,7 +2797,7 @@
                 if (SUBJECTS[activeSubjectKey].evaluated) {
                     let bestCluster = null, bestClusterD = 75;
                     for (const c of CLUSTERS) {
-                        const cx = c.rel[0] * cssW, cy = c.rel[1] * cssH;
+                        const cx = c.rel[0] * canvas.width, cy = c.rel[1] * canvas.height;
                         const d = Math.hypot(mx - cx, my - cy);
                         if (d < bestClusterD) { bestClusterD = d; bestCluster = c; }
                     }
@@ -2735,15 +2810,48 @@
             // marked manuallyPositioned so the automatic declutter pass (see
             // resolveClusterOverlaps) leaves it alone from then on — it becomes a
             // fixed anchor that other, non-dragged galaxies will steer around.
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const r = canvas.getBoundingClientRect();
+                const rawMx = e.clientX - r.left, rawMy = e.clientY - r.top;
+                
+                const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+                const newScale = Math.max(0.5, Math.min(2.0, camera.scale * zoomFactor));
+                const scaleRatio = newScale / camera.scale;
+                
+                const dpr = window.devicePixelRatio || 1;
+                camera.offsetX = (rawMx * dpr) - (rawMx * dpr - camera.offsetX) * scaleRatio;
+                camera.offsetY = (rawMy * dpr) - (rawMy * dpr - camera.offsetY) * scaleRatio;
+                camera.scale = newScale;
+                updateResetViewBtn();
+            });
+
+            function updateResetViewBtn() {
+                const btn = document.getElementById('resetViewBtn');
+                if (camera.scale !== 1 || camera.offsetX !== 0 || camera.offsetY !== 0) {
+                    btn.style.display = 'block';
+                } else {
+                    btn.style.display = 'none';
+                }
+            }
+
+            document.getElementById('resetViewBtn').addEventListener('click', () => {
+                camera = { offsetX: 0, offsetY: 0, scale: 1 };
+                updateResetViewBtn();
+            });
+
             canvas.addEventListener('pointerdown', (e) => {
-                if (e.pointerType === 'touch') {
+                activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+                if (e.pointerType === 'touch' && activePointers.size === 1) {
                     const r = canvas.getBoundingClientRect();
-                    const mx = e.clientX - r.left, my = e.clientY - r.top;
+                    const rawMx = e.clientX - r.left, rawMy = e.clientY - r.top;
+                    const { x: mx, y: my } = screenToWorld(rawMx, rawMy);
                     const currentStudents = SUBJECTS[activeSubjectKey].students;
                     let clickedStudent = null, bestStudentD = 22;
                     for (const p of currentStudents) {
-                        const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * cssW);
-                        const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * cssH);
+                        const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
+                        const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
                         const d = Math.hypot(sx - mx, sy - my);
                         if (d < bestStudentD) { bestStudentD = d; clickedStudent = p; }
                     }
@@ -2752,50 +2860,97 @@
 
                 if (!SUBJECTS[activeSubjectKey].evaluated) return;
                 const r = canvas.getBoundingClientRect();
-                const mx = e.clientX - r.left, my = e.clientY - r.top;
+                const rawMx = e.clientX - r.left, rawMy = e.clientY - r.top;
+                const { x: mx, y: my } = screenToWorld(rawMx, rawMy);
 
                 let bestCluster = null, bestD = Infinity;
-                for (const c of CLUSTERS) {
-                    const cx = c.rel[0] * cssW, cy = c.rel[1] * cssH;
-                    const rad = 42 + c.severity * 58;
-                    const hitRadius = rad + 20;
-                    const d = Math.hypot(mx - cx, my - cy);
-                    if (d < hitRadius && d < bestD) { bestD = d; bestCluster = c; }
-                }
+                if (activePointers.size === 1) {
+                    for (const c of CLUSTERS) {
+                        const cx = c.rel[0] * canvas.width, cy = c.rel[1] * canvas.height;
+                        const rad = 42 + c.severity * 58;
+                        const hitRadius = rad + 20;
+                        const d = Math.hypot(mx - cx, my - cy);
+                        if (d < hitRadius && d < bestD) { bestD = d; bestCluster = c; }
+                    }
 
-                if (bestCluster) {
-                    e.preventDefault();
-                    draggingCluster = bestCluster;
-                    dragMoved = false;
-                    canvas.style.cursor = 'grabbing';
+                    if (bestCluster) {
+                        e.preventDefault();
+                        draggingCluster = bestCluster;
+                        dragMoved = false;
+                        canvas.style.cursor = 'grabbing';
+                    } else if (!hovered) {
+                        panStart = { x: rawMx, y: rawMy, camX: camera.offsetX, camY: camera.offsetY };
+                    }
+                } else {
+                    draggingCluster = null;
+                    panStart = null;
                 }
             });
 
             canvas.addEventListener('pointermove', (e) => {
+                if (activePointers.has(e.pointerId)) {
+                    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                }
+
                 const r = canvas.getBoundingClientRect();
-                const mx = e.clientX - r.left, my = e.clientY - r.top;
+                const rawMx = e.clientX - r.left, rawMy = e.clientY - r.top;
+                const { x: mx, y: my } = screenToWorld(rawMx, rawMy);
+
+                if (activePointers.size === 2) {
+                    const pts = Array.from(activePointers.values());
+                    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+                    
+                    if (!camera.lastPinchDist) {
+                        camera.lastPinchDist = dist;
+                    } else {
+                        const delta = dist - camera.lastPinchDist;
+                        const zoomFactor = 1 + delta * 0.005;
+                        
+                        const midX = (pts[0].x + pts[1].x) / 2 - r.left;
+                        const midY = (pts[0].y + pts[1].y) / 2 - r.top;
+                        
+                        const newScale = Math.max(0.5, Math.min(2.0, camera.scale * zoomFactor));
+                        const scaleRatio = newScale / camera.scale;
+                        
+                        const dpr = window.devicePixelRatio || 1;
+                        camera.offsetX = (midX * dpr) - (midX * dpr - camera.offsetX) * scaleRatio;
+                        camera.offsetY = (midY * dpr) - (midY * dpr - camera.offsetY) * scaleRatio;
+                        camera.scale = newScale;
+                        
+                        camera.lastPinchDist = dist;
+                        updateResetViewBtn();
+                    }
+                    return;
+                }
 
                 if (draggingCluster) {
                     dragMoved = true;
                     draggingCluster.rel = [
-                        Math.min(0.94, Math.max(0.06, mx / cssW)),
-                        Math.min(0.94, Math.max(0.06, my / cssH))
+                        Math.min(0.94, Math.max(0.06, mx / canvas.width)),
+                        Math.min(0.94, Math.max(0.06, my / canvas.height))
                     ];
                     draggingCluster.manuallyPositioned = true;
                     canvas.style.cursor = 'grabbing';
                     return;
                 }
 
+                if (panStart) {
+                    const dpr = window.devicePixelRatio || 1;
+                    camera.offsetX = panStart.camX + (rawMx - panStart.x) * dpr;
+                    camera.offsetY = panStart.camY + (rawMy - panStart.y) * dpr;
+                    updateResetViewBtn();
+                    return;
+                }
+
                 if (e.pointerType === 'touch') {
-                    // Touch moves shouldn't trigger/clear hover states.
                     return;
                 }
 
                 const currentStudents = SUBJECTS[activeSubjectKey].students;
                 let best = null, bestD = 20;
                 for (const p of currentStudents) {
-                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * cssW);
-                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * cssH);
+                    const sx = p.px != null ? p.px : (p.x != null ? p.x : p.sx * canvas.width);
+                    const sy = p.py != null ? p.py : (p.y != null ? p.y : p.sy * canvas.height);
                     const d = Math.hypot(sx - mx, sy - my);
                     if (d < bestD) { bestD = d; best = p; }
                 }
@@ -2816,7 +2971,14 @@
                 }
             });
 
-            function endClusterDrag() {
+            function endPointer(e) {
+                activePointers.delete(e.pointerId);
+                if (activePointers.size < 2) camera.lastPinchDist = null;
+                if (activePointers.size === 0) panStart = null;
+            }
+
+            function endClusterDrag(e) {
+                if (e) endPointer(e);
                 if (draggingCluster) {
                     selected = draggingCluster;
                     justDraggedCluster = dragMoved;
@@ -2826,11 +2988,12 @@
                 }
             }
             window.addEventListener('pointerup', endClusterDrag);
+            window.addEventListener('pointercancel', endClusterDrag);
             canvas.addEventListener('pointerleave', (e) => {
                 if (e && e.pointerType !== 'touch') {
                     hovered = null;
                 }
-                endClusterDrag();
+                endClusterDrag(e);
             });
 
             const SPARKLE_OFFSETS = [
@@ -2856,7 +3019,7 @@
             }
 
             function bracket(x, y1, y2, dir) {
-                const tick = 6 * dir;
+                const tick = 6 * dir * camera.scale;
                 ctx.beginPath();
                 ctx.moveTo(x + tick, y1); ctx.lineTo(x, y1); ctx.lineTo(x, y2); ctx.lineTo(x + tick, y2);
                 ctx.stroke();
@@ -2868,7 +3031,9 @@
                 ctx.fillRect(0, 0, w, h);
 
                 for (const nb of NEBULA) {
-                    const g = ctx.createRadialGradient(nb.x * w, nb.y * h, 0, nb.x * w, nb.y * h, nb.r);
+                    const {x, y} = worldToScreen(nb.x * w, nb.y * h);
+                    const r = nb.r * camera.scale;
+                    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
                     g.addColorStop(0, nb.color + 'aa');
                     g.addColorStop(1, 'rgba(0,0,0,0)');
                     ctx.fillStyle = g;
@@ -2878,7 +3043,9 @@
                 for (const s of bgStars) {
                     ctx.globalAlpha = s.a;
                     ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(Math.round(s.x * w), Math.round(s.y * h), s.size, s.size);
+                    const {x, y} = worldToScreen(s.x * w, s.y * h);
+                    const size = s.size * camera.scale;
+                    ctx.fillRect(Math.round(x), Math.round(y), size, size);
                 }
                 ctx.globalAlpha = 1;
 
@@ -2896,22 +3063,25 @@
                     if (cycle < p.dur) {
                         const f = cycle / p.dur;
                         const x0 = -0.05, y0 = p.lane, x1 = 1.05, y1 = p.lane + 0.16;
-                        const x = (x0 + (x1 - x0) * f) * w, y = (y0 + (y1 - y0) * f) * h;
-                        p.trail.push({ x, y });
+                        const wx = (x0 + (x1 - x0) * f) * w, wy = (y0 + (y1 - y0) * f) * h;
+                        p.trail.push({ x: wx, y: wy });
                         if (p.trail.length > 26) p.trail.shift();
 
                         for (let i = 0; i < p.trail.length - 1; i++) {
                             const a = i / p.trail.length;
                             ctx.globalAlpha = a * 0.45;
                             ctx.strokeStyle = '#F2E0A4';
-                            ctx.lineWidth = 0.5 + a * 2.2;
+                            ctx.lineWidth = (0.5 + a * 2.2) * camera.scale;
                             ctx.beginPath();
-                            ctx.moveTo(p.trail[i].x, p.trail[i].y);
-                            ctx.lineTo(p.trail[i + 1].x, p.trail[i + 1].y);
+                            const pt1 = worldToScreen(p.trail[i].x, p.trail[i].y);
+                            const pt2 = worldToScreen(p.trail[i + 1].x, p.trail[i + 1].y);
+                            ctx.moveTo(pt1.x, pt1.y);
+                            ctx.lineTo(pt2.x, pt2.y);
                             ctx.stroke();
                         }
                         ctx.globalAlpha = 1;
-                        pixelStar(x, y, 2.4, '#F2E0A4', 0.95);
+                        const {x, y} = worldToScreen(wx, wy);
+                        pixelStar(x, y, 2.4 * camera.scale, '#F2E0A4', 0.95);
                     } else {
                         p.trail = [];
                     }
@@ -2922,8 +3092,8 @@
                     resolveClusterOverlaps(CLUSTERS, w, h);
 
                     for (const c of CLUSTERS) {
-                        const cx = c.rel[0] * w, cy = c.rel[1] * h;
-                        const rad = 42 + c.severity * 58;
+                        const {x: cx, y: cy} = worldToScreen(c.rel[0] * w, c.rel[1] * h);
+                        const rad = (42 + c.severity * 58) * camera.scale;
 
                         const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad * 2.2);
                         grad.addColorStop(0, c.color + '35');
@@ -2933,22 +3103,22 @@
 
                         ctx.beginPath();
                         ctx.fillStyle = c.color;
-                        ctx.arc(cx, cy, 5.5, 0, Math.PI * 2);
+                        ctx.arc(cx, cy, 5.5 * camera.scale, 0, Math.PI * 2);
                         ctx.fill();
 
                         ctx.fillStyle = '#CAC5E5';
-                        ctx.font = '700 12px ui-monospace, monospace';
+                        ctx.font = `700 ${12 * camera.scale}px ui-monospace, monospace`;
                         ctx.textAlign = 'center';
-                        ctx.fillText(c.label.toUpperCase(), cx, cy - rad - 14);
+                        ctx.fillText(c.label.toUpperCase(), cx, cy - rad - 14 * camera.scale);
                         ctx.fillStyle = '#8a8a96';
-                        ctx.font = '9px ui-monospace, monospace';
+                        ctx.font = `${9 * camera.scale}px ui-monospace, monospace`;
                         const cnt = currentStudents.filter(p => p.cluster === c && !p.isShooter).length;
-                        ctx.fillText(cnt + ' students', cx, cy - rad - 1);
+                        ctx.fillText(cnt + ' students', cx, cy - rad - 1 * camera.scale);
 
                         if (c === selected) {
-                            ctx.strokeStyle = c.color; ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+                            ctx.strokeStyle = c.color; ctx.lineWidth = 1 * camera.scale; ctx.setLineDash([3 * camera.scale, 4 * camera.scale]);
                             ctx.globalAlpha = 0.7;
-                            ctx.beginPath(); ctx.arc(cx, cy, rad + 14, 0, Math.PI * 2); ctx.stroke();
+                            ctx.beginPath(); ctx.arc(cx, cy, rad + 14 * camera.scale, 0, Math.PI * 2); ctx.stroke();
                             ctx.globalAlpha = 1; ctx.setLineDash([]);
                         }
                     }
@@ -2957,11 +3127,13 @@
                     for (const c of CLUSTERS) {
                         const members = currentStudents.filter(p => p.cluster === c && !p.isShooter && p.px != null);
                         ctx.strokeStyle = c.color + '30';
-                        ctx.lineWidth = 1; ctx.setLineDash([1, 4]);
+                        ctx.lineWidth = 1 * camera.scale; ctx.setLineDash([1 * camera.scale, 4 * camera.scale]);
                         for (let i = 0; i < members.length - 1; i++) {
                             ctx.beginPath();
-                            ctx.moveTo(members[i].px, members[i].py);
-                            ctx.lineTo(members[i + 1].px, members[i + 1].py);
+                            const pt1 = worldToScreen(members[i].px, members[i].py);
+                            const pt2 = worldToScreen(members[i + 1].px, members[i + 1].py);
+                            ctx.moveTo(pt1.x, pt1.y);
+                            ctx.lineTo(pt2.x, pt2.y);
                             ctx.stroke();
                         }
                         ctx.setLineDash([]);
@@ -3006,9 +3178,10 @@
                         for (let i = 0; i < p.trail.length; i++) {
                             const a = i / p.trail.length;
                             const spread = (1 - a) * 3.5;
-                            const jx = Math.round(p.trail[i].x + (Math.random() - 0.5) * spread);
-                            const jy = Math.round(p.trail[i].y + (Math.random() - 0.5) * spread);
-                            const dsize = Math.round(1.2 + a * 1.8);
+                            const pt = worldToScreen(p.trail[i].x, p.trail[i].y);
+                            const jx = Math.round(pt.x + (Math.random() - 0.5) * spread);
+                            const jy = Math.round(pt.y + (Math.random() - 0.5) * spread);
+                            const dsize = Math.round(1.2 + a * 1.8) * camera.scale;
                             ctx.globalAlpha = a * 0.65;
                             ctx.fillStyle = LIGHT_YELLOW;
                             ctx.fillRect(jx, jy, dsize, dsize);
@@ -3016,12 +3189,13 @@
                         ctx.globalAlpha = 1;
 
                         const isHover = hovered === p;
-                        pixelStar(p.x, p.y, isHover ? 3.6 : 2.8, isHover ? '#FFFFFF' : LIGHT_YELLOW, 1);
+                        const {x, y} = worldToScreen(p.x, p.y);
+                        pixelStar(x, y, (isHover ? 3.6 : 2.8) * camera.scale, isHover ? '#FFFFFF' : LIGHT_YELLOW, 1);
 
-                        ctx.font = '700 10px ui-monospace, monospace';
+                        ctx.font = `700 ${10 * camera.scale}px ui-monospace, monospace`;
                         ctx.textAlign = 'left';
                         ctx.fillStyle = isHover ? '#FFFFFF' : LIGHT_YELLOW;
-                        ctx.fillText(p.name.toUpperCase() + ' · 100%', p.x + 12, p.y - 6);
+                        ctx.fillText(p.name.toUpperCase() + ' · 100%', x + 12 * camera.scale, y - 6 * camera.scale);
 
                     } else if (!p.cluster || !isSubjectEvaluated) {
                         // Unclustered / Scattered Light Yellow Star
@@ -3035,12 +3209,13 @@
                         if (p.py < margin || p.py > h - margin) p.vy *= -1;
 
                         const isHover = hovered === p;
-                        pixelStar(p.px, p.py, isHover ? 3.2 : 2.2, LIGHT_YELLOW, 0.95);
+                        const {x, y} = worldToScreen(p.px, p.py);
+                        pixelStar(x, y, (isHover ? 3.2 : 2.2) * camera.scale, LIGHT_YELLOW, 0.95);
 
-                        ctx.font = '600 9px ui-monospace, monospace';
+                        ctx.font = `600 ${9 * camera.scale}px ui-monospace, monospace`;
                         ctx.textAlign = 'left';
                         ctx.fillStyle = LIGHT_YELLOW;
-                        ctx.fillText(p.name, p.px + 10, p.py - 4);
+                        ctx.fillText(p.name, x + 10 * camera.scale, y - 4 * camera.scale);
 
                     } else {
                         // Clustered Star orbiting assigned galaxy
@@ -3060,16 +3235,17 @@
                         }
                         p.px = px; p.py = py;
                         const isHover = hovered === p;
-                        const unit = isHover ? 2.8 : (1.8 + p.confidence * 0.8);
-                        pixelStar(px, py, unit, isHover ? '#ffffff' : c.color, tt < 1 ? (0.3 + 0.7 * eased) : 1);
+                        const unit = (isHover ? 2.8 : (1.8 + p.confidence * 0.8)) * camera.scale;
+                        const {x, y} = worldToScreen(px, py);
+                        pixelStar(x, y, unit, isHover ? '#ffffff' : c.color, tt < 1 ? (0.3 + 0.7 * eased) : 1);
 
                         if (p.justGraded) {
                             const age = now - p.justGraded;
                             if (age < 1600) {
                                 ctx.globalAlpha = (1 - age / 1600) * 0.85;
                                 ctx.strokeStyle = '#ffffff';
-                                ctx.lineWidth = 1.4;
-                                ctx.beginPath(); ctx.arc(px, py, 9 + age * 0.012, 0, Math.PI * 2); ctx.stroke();
+                                ctx.lineWidth = 1.4 * camera.scale;
+                                ctx.beginPath(); ctx.arc(x, y, (9 + age * 0.012) * camera.scale, 0, Math.PI * 2); ctx.stroke();
                                 ctx.globalAlpha = 1;
                             } else { p.justGraded = null; }
                         }
@@ -3082,13 +3258,9 @@
                     const sy = hovered.py != null ? hovered.py : hovered.y;
 
                     if (sx != null && sy != null) {
-                        ctx.font = '11px ui-monospace, monospace';
+                        const {x: sx_screen, y: sy_screen} = worldToScreen(sx, sy);
+                        ctx.font = `${11 * camera.scale}px ui-monospace, monospace`;
 
-                        // Build the callout's lines first so the box can be sized to fit
-                        // them — a fixed-width box (the old approach) let longer content,
-                        // like "Galaxy: Multiplication & Division", spill past its right
-                        // edge and off the canvas entirely. Measuring first fixes that for
-                        // every combination of name/galaxy length, not just this one case.
                         const lines = [
                             { text: 'Name: ' + hovered.name, color: '#f5f5f7' },
                             { text: 'ID: #' + hovered.sid, color: '#f5f5f7' }
@@ -3104,36 +3276,32 @@
                             lines.push({ text: 'Awaiting Evaluation', color: '#8a8a98' });
                         }
 
-                        const PAD_X = 10, TOP_OFFSET = 18, LINE_H = 15, BOTTOM_PAD = 9;
+                        const PAD_X = 10 * camera.scale, TOP_OFFSET = 18 * camera.scale, LINE_H = 15 * camera.scale, BOTTOM_PAD = 9 * camera.scale;
                         let maxTextWidth = 0;
                         for (const line of lines) {
                             const tw = ctx.measureText(line.text).width;
                             if (tw > maxTextWidth) maxTextWidth = tw;
                         }
-                        const boxW = Math.max(120, Math.ceil(maxTextWidth) + PAD_X * 2);
+                        const boxW = Math.max(120 * camera.scale, Math.ceil(maxTextWidth) + PAD_X * 2);
                         const boxH = TOP_OFFSET + (lines.length - 1) * LINE_H + BOTTOM_PAD;
 
-                        let boxX = sx + 36;
-                        const leftSide = boxX + boxW > w - 8;
-                        if (leftSide) boxX = sx - 36 - boxW;
-                        // Final safety net: whatever side was chosen and however wide the box
-                        // ended up, always keep the entire box on-canvas. This is what
-                        // actually guarantees the tooltip can never render out of frame,
-                        // even on a narrow window/canvas where neither preferred side fits.
-                        boxX = Math.min(w - boxW - 8, Math.max(8, boxX));
-                        let boxY = Math.max(8, Math.min(h - boxH - 8, sy - 14));
+                        let boxX = sx_screen + 36 * camera.scale;
+                        const leftSide = boxX + boxW > cssW - 8 * camera.scale;
+                        if (leftSide) boxX = sx_screen - 36 * camera.scale - boxW;
+                        boxX = Math.min(cssW - boxW - 8 * camera.scale, Math.max(8 * camera.scale, boxX));
+                        let boxY = Math.max(8 * camera.scale, Math.min(cssH - boxH - 8 * camera.scale, sy_screen - 14 * camera.scale));
 
-                        ctx.strokeStyle = '#e8e6f0'; ctx.lineWidth = 1.2;
-                        ctx.beginPath(); ctx.arc(sx, sy, 4, 0, Math.PI * 2); ctx.stroke();
+                        ctx.strokeStyle = '#e8e6f0'; ctx.lineWidth = 1.2 * camera.scale;
+                        ctx.beginPath(); ctx.arc(sx_screen, sy_screen, 4 * camera.scale, 0, Math.PI * 2); ctx.stroke();
                         ctx.fillStyle = '#e8e6f0';
-                        ctx.beginPath(); ctx.arc(sx, sy, 1.2, 0, Math.PI * 2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(sx_screen, sy_screen, 1.2 * camera.scale, 0, Math.PI * 2); ctx.fill();
 
-                        const midX = leftSide ? sx - 18 : sx + 18;
-                        const anchorY = boxY + 14;
-                        ctx.strokeStyle = '#cfcfd8'; ctx.lineWidth = 1;
+                        const midX = leftSide ? sx_screen - 18 * camera.scale : sx_screen + 18 * camera.scale;
+                        const anchorY = boxY + 14 * camera.scale;
+                        ctx.strokeStyle = '#cfcfd8'; ctx.lineWidth = 1 * camera.scale;
                         ctx.beginPath();
-                        ctx.moveTo(sx, sy);
-                        ctx.lineTo(midX, sy);
+                        ctx.moveTo(sx_screen, sy_screen);
+                        ctx.lineTo(midX, sy_screen);
                         ctx.lineTo(midX, anchorY);
                         ctx.lineTo(leftSide ? boxX + boxW : boxX, anchorY);
                         ctx.stroke();
@@ -3144,7 +3312,7 @@
                         bracket(leftSide ? boxX + boxW : boxX, boxY, boxY + boxH, leftSide ? -1 : 1);
 
                         ctx.textAlign = 'left';
-                        ctx.font = '11px ui-monospace, monospace';
+                        ctx.font = `${11 * camera.scale}px ui-monospace, monospace`;
                         lines.forEach((line, i) => {
                             ctx.fillStyle = line.color;
                             ctx.fillText(line.text, boxX + PAD_X, boxY + TOP_OFFSET + i * LINE_H);
