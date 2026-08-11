@@ -66,6 +66,8 @@ The_Knowloadge_Galaxy
 
 ##  Future Upgrades
 
+- **Handwriting Recognition:** Improve handwriting recognition algorithms and add support for merging multiple curriculum PDF files.
+- **Analytics Dashboard:** Develop a comprehensive graphical analytics dashboard for teachers to track student progress over time, and expand features to include additional subjects and language support..
 - **Persistent Storage:** Replace in-memory roster/textbook storage with a real database (e.g. SQLite or Firestore) so class data survives a server restart.
 - **Authentication:** Add teacher login so each account only sees their own classes, subjects, and student data.
 
